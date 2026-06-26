@@ -311,7 +311,7 @@ body {
 .top-bar {
     width: 100%;
     display: grid;
-    grid-template-columns: auto auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto auto;
     align-items: center;
     gap: 8px;
     position: absolute;
@@ -332,9 +332,13 @@ body {
     transform: translateX(-50%);
     pointer-events: none;
 }
-.top-bar > .volume-widget {
+.top-bar > #helpBtn {
     justify-self: end;
     grid-column: 4;
+}
+.top-bar > .volume-widget {
+    justify-self: end;
+    grid-column: 5;
 }
 
 /* streak-badge now inherits all layout from .top-btn */
@@ -1817,4 +1821,40 @@ input[type="text"]#piInput:focus {
 }
 .dark-mode .installer-step-title {
     border-bottom-color: var(--modal-border-subtle);
+}
+
+/* Installer modal needs to scroll when a slide is tall (e.g. PAO Source
+   with all three textareas, or PAO Range with the 3-mode radio).
+   The .modal-content rule sets max-height:85vh + overflow:hidden
+   globally, so we add overflow-y:auto just for the installer. */
+#installerContent {
+    overflow-y: auto;
+}
+
+/* Per-textarea validation status line under the PAO Source
+   Person/Action/Object textareas. */
+.inst-validation {
+    font-size: 0.78rem;
+    color: #f87171;
+    margin: -2px 0 8px 0;
+    min-height: 0;
+    line-height: 1.35;
+    display: none;
+}
+.dark-mode .inst-validation {
+    color: #fca5a5;
+}
+
+/* Stats modal: colour-scheme <select> alignment. Fixed height + line-height
+   matches the label baseline so the dropdown isn't vertically offset. */
+.stats-color-scheme-select {
+    font-size: 0.78rem;
+    padding: 2px 6px;
+    background: var(--stats-input-bg);
+    color: var(--stats-text);
+    border: 1px solid var(--stats-border);
+    border-radius: 4px;
+    height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
 }

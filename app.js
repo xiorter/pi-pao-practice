@@ -146,6 +146,185 @@
                     if (note) note.style.display = _isLocalDev() ? "none" : "";
                 }
 
+                // Reflect the current paoRangeMode in the settings UI:
+                //   "222"   → hide 3-2-3 row, lock 2-2-2 range to 1..N
+                //   "323"   → hide 2-2-2 row, lock 3-2-3 range to 1..N
+                //   "both"  → show both rows, leave range inputs free
+                // (N = PI_DIGITS.length)
+                function _applyPaoRangeMode() {
+                    const r222 = document.getElementById("paoRange222Row");
+                    const r323 = document.getElementById("paoRange323Row");
+                    const msg = document.getElementById("paoRangeLockedMsg");
+                    if (r222) r222.style.display = "";
+                    if (r323) r323.style.display = "";
+                    if (msg) msg.style.display = "none";
+                    if (paoRangeMode === "222") {
+                        range222Start = 1;
+                        range222End = PI_DIGITS.length;
+                        range323Start = 1;
+                        range323End = PI_DIGITS.length;
+                        if (r323) r323.style.display = "none";
+                        if (msg) {
+                            msg.textContent = `2-2-2 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                            msg.style.display = "";
+                        }
+                    } else if (paoRangeMode === "323") {
+                        range222Start = 1;
+                        range222End = PI_DIGITS.length;
+                        range323Start = 1;
+                        range323End = PI_DIGITS.length;
+                        if (r222) r222.style.display = "none";
+                        if (msg) {
+                            msg.textContent = `3-2-3 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                            msg.style.display = "";
+                        }
+                    }
+                    // Mirror the values into the visible range inputs
+                    const sS = document.getElementById("range222Start");
+                    const sE = document.getElementById("range222End");
+                    const sS3 = document.getElementById("range323Start");
+                    const sE3 = document.getElementById("range323End");
+                    if (sS) sS.value = range222Start;
+                    if (sE) sE.value = range222End;
+                    if (sS3) sS3.value = range323Start;
+                    if (sE3) sE3.value = range323End;
+                }
+
+                // ── PAO textarea validation ──
+                // For Person + Object: if any key in the parsed map has length
+                // ≥ 3 (e.g. "000"), the requirement is 000..999 (1000 entries);
+                // otherwise it's 00..99 (100 entries). Action is always 00..99.
+                // Returns:
+                //   {
+                //     person:  { ok, missing[], extra[], blankTerms[], has3 },
+                //     action:  { ok, missing[], extra[], blankTerms[] },
+                //     object:  { ok, missing[], extra[], blankTerms[], has3 },
+                //     require3: <bool>  // true if any PO key is 3+ digits
+                //   }
+                function _validatePaoLists(p, a, o) {
+                    const allKeys = (m) => Object.keys(m || {});
+                    const has3 = (m) => allKeys(m).some((k) => k.length >= 3);
+                    const any3 = has3(p) || has3(o);
+
+                    // Build the required set depending on mode
+                    const reqPerson = any3
+                        ? Array.from({ length: 1000 }, (_, i) =>
+                              String(i).padStart(3, "0"),
+                          )
+                        : Array.from({ length: 100 }, (_, i) =>
+                              String(i).padStart(2, "0"),
+                          );
+                    const reqObject = reqPerson; // symmetric
+                    const reqAction = Array.from({ length: 100 }, (_, i) =>
+                        String(i).padStart(2, "0"),
+                    );
+
+                    const validate = (map, required) => {
+                        const present = allKeys(map);
+                        const presentSet = new Set(present);
+                        const missing = required.filter(
+                            (k) => !presentSet.has(k),
+                        );
+                        const extra = present.filter(
+                            (k) => !required.includes(k),
+                        );
+                        const blankTerms = present.filter(
+                            (k) => !String(map[k] || "").trim(),
+                        );
+                        return {
+                            ok:
+                                missing.length === 0 &&
+                                extra.length === 0 &&
+                                blankTerms.length === 0,
+                            missing,
+                            extra,
+                            blankTerms,
+                        };
+                    };
+
+                    return {
+                        person: validate(p, reqPerson),
+                        action: validate(a, reqAction),
+                        object: validate(o, reqObject),
+                        require3: any3,
+                    };
+                }
+
+                // Apply the red/blue border + status message to an installer
+                // or settings textarea given a validation result.
+                //   { ok: null } = pristine (untouched) — neutral border, no msg
+                //   { ok: true }  = valid — blue border, no msg
+                //   { ok: false } = invalid — red border, error msg
+                function _applyPaoValidationUi(textareaEl, statusEl, result) {
+                    if (!textareaEl) return;
+                    textareaEl.style.border = "";
+                    if (statusEl) {
+                        statusEl.textContent = "";
+                        statusEl.style.display = "none";
+                    }
+                    if (!result || result.ok === null) return;
+                    if (result.ok) {
+                        textareaEl.style.border =
+                            "1.5px solid var(--accent, #3584E4)";
+                        return;
+                    }
+                    textareaEl.style.border = "1.5px solid #f87171";
+                    if (statusEl) {
+                        const bits = [];
+                        if (result.missing && result.missing.length)
+                            bits.push(
+                                `Missing ${result.missing.length} key${
+                                    result.missing.length === 1 ? "" : "s"
+                                }: ${result.missing
+                                    .slice(0, 6)
+                                    .join(", ")}${
+                                    result.missing.length > 6 ? "…" : ""
+                                }`,
+                            );
+                        if (result.extra && result.extra.length)
+                            bits.push(
+                                `${result.extra.length} unexpected key${
+                                    result.extra.length === 1 ? "" : "s"
+                                }: ${result.extra
+                                    .slice(0, 6)
+                                    .join(", ")}`,
+                            );
+                        if (result.blankTerms && result.blankTerms.length)
+                            bits.push(
+                                `${result.blankTerms.length} blank term${
+                                    result.blankTerms.length === 1 ? "" : "s"
+                                }`,
+                            );
+                        statusEl.textContent = bits.join(" · ");
+                        statusEl.style.display = "";
+                    }
+                }
+
+                // Validate the Settings page's Person/Action/Object textareas
+                // and apply the border + status message styling.
+                function _updateSettingsPaoValidation() {
+                    const r = _validatePaoLists(
+                        personList,
+                        actionList,
+                        objectList,
+                    );
+                    _applyPaoValidationUi(
+                        document.getElementById("personList"),
+                        document.getElementById("personListStatus"),
+                        r.person,
+                    );
+                    _applyPaoValidationUi(
+                        document.getElementById("actionList"),
+                        document.getElementById("actionListStatus"),
+                        r.action,
+                    );
+                    _applyPaoValidationUi(
+                        document.getElementById("objectList"),
+                        document.getElementById("objectListStatus"),
+                        r.object,
+                    );
+                }
+
                 // ── Daily Goal / Stats ──
                 let dailyGoal = 400;
                 let dailyStats = {}; // { "2026-06-21": correctDigitCount }
@@ -443,6 +622,10 @@
                     range222End = 3000;
                 let range323Start = 3001;
                 let range323End = 10000;
+                // "222" | "323" | "both" — when a single mode is selected,
+                // the app uses that mode for all positions and the range
+                // is locked to 1..PI_DIGITS.length.
+                let paoRangeMode = "both";
 
                 // Everest state
                 let everestScore = 0;
@@ -815,6 +998,8 @@
                 }
 
                 function getModeForPos(oneBasedPos) {
+                    if (paoRangeMode === "222") return "222";
+                    if (paoRangeMode === "323") return "323";
                     return oneBasedPos >= range323Start ? "323" : "222";
                 }
                 function updateAutoMode(oneBasedPos) {
@@ -830,6 +1015,7 @@
                         );
                         currentPAOMode = s.currentPAOMode || "222";
                         paoDataSource = s.paoDataSource || "textarea";
+                        paoRangeMode = s.paoRangeMode || "both";
                         range222Start = s.range222Start || 1;
                         range222End = s.range222End || 3000;
                         range323Start = s.range323Start || 3001;
@@ -944,6 +1130,11 @@
                         document.querySelector(
                             `input[name="paoDataSource"][value="${paoDataSource}"]`,
                         ).checked = true;
+                        const rmode = document.querySelector(
+                            `input[name="paoRangeMode"][value="${paoRangeMode}"]`,
+                        );
+                        if (rmode) rmode.checked = true;
+                        _applyPaoRangeMode();
                         document.getElementById("range222Start").value =
                             range222Start;
                         document.getElementById("range222End").value =
@@ -953,6 +1144,8 @@
                         personListTextarea.value = formatPaoList(personList);
                         actionListTextarea.value = formatPaoList(actionList);
                         objectListTextarea.value = formatPaoList(objectList);
+                        // Validate the textareas on settings load
+                        _updateSettingsPaoValidation();
                         document.getElementById("excelNumCol").value =
                             excelColumnConfig.numCol;
                         document.getElementById("excelPerson3Col").value =
@@ -1128,6 +1321,9 @@
                         actionList = parsePaoList(actionListTextarea.value);
                         objectList = parsePaoList(objectListTextarea.value);
                     }
+                    // Refresh the on-page PAO validation status indicators
+                    if (typeof _updateSettingsPaoValidation === "function")
+                        _updateSettingsPaoValidation();
                     lockOnIncorrect =
                         document.getElementById("lockOnIncorrect").checked;
                     darkMode =
@@ -1236,6 +1432,13 @@
                         ) || 3001;
                     const r323e = document.getElementById("range323End");
                     if (r323e) range323End = parseInt(r323e.value) || 10000;
+                    // PAO range mode radio (222 / 323 / both)
+                    const rmodeEl = document.querySelector(
+                        'input[name="paoRangeMode"]:checked',
+                    );
+                    if (rmodeEl) paoRangeMode = rmodeEl.value || "both";
+                    // In single-mode, lock the range to 1..PI_DIGITS.length
+                    _applyPaoRangeMode();
                     const schemeEl = document.getElementById(
                         "heatmapSchemeSelect",
                     );
@@ -1316,6 +1519,7 @@
                         range222End,
                         range323Start,
                         range323End,
+                        paoRangeMode,
                         heatmapScheme,
                         everestHighScore,
                         everestHSFrom,
@@ -4386,6 +4590,18 @@
                     personListTextarea = document.getElementById("personList");
                     actionListTextarea = document.getElementById("actionList");
                     objectListTextarea = document.getElementById("objectList");
+                    // Live PAO textarea validation on the Settings page
+                    const wireSettingsPaoTa = (id, setter) => {
+                        const el = document.getElementById(id);
+                        if (el)
+                            el.addEventListener("input", () => {
+                                setter(parsePaoList(el.value));
+                                _updateSettingsPaoValidation();
+                            });
+                    };
+                    wireSettingsPaoTa("personList", (m) => (personList = m));
+                    wireSettingsPaoTa("actionList", (m) => (actionList = m));
+                    wireSettingsPaoTa("objectList", (m) => (objectList = m));
                     imagesListDiv = document.getElementById("imagesList");
                     srsModal = document.getElementById("srsModal");
                     practiceSeekImg =
@@ -4966,6 +5182,17 @@
                             }),
                         );
 
+                    // PAO range mode radio (222 / 323 / both)
+                    document
+                        .querySelectorAll("input[name='paoRangeMode']")
+                        .forEach((r) =>
+                            r.addEventListener("change", (e) => {
+                                paoRangeMode = e.target.value;
+                                _applyPaoRangeMode();
+                                saveSettings();
+                            }),
+                        );
+
                     // Anki TXT Upload
                     document.getElementById("ankiTxtUpload").onchange = (e) => {
                         const f = e.target.files[0];
@@ -5345,6 +5572,16 @@
                             excelActionList = tA;
                             excelObjectList = tO;
                             saveSettings();
+                            instExcelLoaded = true;
+                            if (typeof _installerUpdateNextButton === "function")
+                                _installerUpdateNextButton();
+                            const exStatus = document.getElementById(
+                                "instExcelStatus",
+                            );
+                            if (exStatus) {
+                                exStatus.textContent = "✓ Excel loaded";
+                                exStatus.className = "anki-status loaded";
+                            }
                             alert("Excel Data Loaded!");
                         };
                         r.readAsArrayBuffer(f);
@@ -5864,7 +6101,7 @@
                     if (helpBtn)
                         helpBtn.addEventListener("click", () =>
                             window.open(
-                                "https://github.com/xiorter/pi-pao-practice/blob/main/README.md",
+                                "https://github.com/xiorter/pi-pao-practice/blob/master/README.md",
                                 "_blank",
                                 "noopener",
                             ),
@@ -5902,6 +6139,11 @@
                 // Installer modal (first-run + re-openable via the ? button)
                 // ────────────────────────────────────────────────────────────
                 let _installerStep = 0;
+                // Tracks whether a valid Excel file has been uploaded during the
+                // current installer run. Used to gate the PAO Source → Next button
+                // when the Excel option is selected. Reset to false when the
+                // installer is (re-)opened.
+                let instExcelLoaded = false;
                 const _INSTALLER_STEPS = [
                     "appearance",
                     "paoSource",
@@ -5920,6 +6162,8 @@
                             _INSTALLER_STEPS.length - 1,
                         ),
                     );
+                    // Reset per-run state for the PAO Source validation
+                    instExcelLoaded = false;
                     modal.style.display = "flex";
                     renderInstallerStep();
                 }
@@ -5982,6 +6226,43 @@
                         renderInstallerAnkiImages(body);
                     else if (step === "cloudSync")
                         renderInstallerCloudSync(body);
+
+                    // Update the Next/Done button state (some steps gate Next)
+                    _installerUpdateNextButton();
+                }
+
+                // Enable/disable the Next (or Done) button based on the
+                // current step's validity. Currently the only gating step
+                // is PAO Source: Excel needs a successful upload, Textarea
+                // needs all three textareas to pass validation.
+                function _installerUpdateNextButton() {
+                    const nextBtn = document.getElementById("installerNextBtn");
+                    if (!nextBtn) return;
+                    const step = _INSTALLER_STEPS[_installerStep];
+                    let canProceed = true;
+                    if (step === "paoSource") {
+                        const sel = document.querySelector(
+                            'input[name="instPaoSource"]:checked',
+                        );
+                        const v = sel ? sel.value : paoDataSource;
+                        if (v === "excel") {
+                            canProceed = instExcelLoaded;
+                        } else if (v === "textarea") {
+                            const r = _validatePaoLists(
+                                personList,
+                                actionList,
+                                objectList,
+                            );
+                            canProceed =
+                                r.person.ok && r.action.ok && r.object.ok;
+                        }
+                    }
+                    nextBtn.disabled = !canProceed;
+                    nextBtn.style.opacity = canProceed ? "" : "0.5";
+                    nextBtn.style.cursor = canProceed ? "" : "not-allowed";
+                    nextBtn.title = canProceed
+                        ? ""
+                        : "Complete the required fields to continue.";
                 }
 
                 // Per-slide titles shown above each step's body.
@@ -6171,7 +6452,8 @@
                     excelSection.style.cssText =
                         "display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
                     excelSection.innerHTML = `<label style="font-weight:bold">Upload Excel:</label>
-                        <input type="file" id="instExcelUpload" accept=".xlsx,.xls">`;
+                        <input type="file" id="instExcelUpload" accept=".xlsx,.xls">
+                        <span id="instExcelStatus" class="anki-status" style="text-align:left;"></span>`;
                     body.appendChild(excelSection);
 
                     // Textarea section (shown only when Textarea is selected)
@@ -6179,24 +6461,34 @@
                     taSection.id = "instTextareaSection";
                     taSection.style.cssText = "display:none;";
                     taSection.appendChild(
-                        _installerP(
-                            "Format: one entry per line as <code>Number - Term</code>. Lines starting with <code>#</code> are ignored.",
+                        _installerPHtml(
+                            'Format: one entry per line as <code style="background:var(--modal-bg-subtle);padding:1px 4px;border-radius:3px;">Number - Term</code>. Lines starting with <code style="background:var(--modal-bg-subtle);padding:1px 4px;border-radius:3px;">#</code> are ignored.',
                         ),
                     );
                     const tPerson = document.createElement("textarea");
                     tPerson.id = "instPersonList";
                     tPerson.placeholder = "Person (Num - Name)";
                     tPerson.style.cssText =
-                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:6px;";
+                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
                     tPerson.value = formatPaoList(personList);
                     taSection.appendChild(tPerson);
+                    const sPerson = document.createElement("div");
+                    sPerson.id = "instPersonStatus";
+                    sPerson.className = "inst-validation";
+                    taSection.appendChild(sPerson);
+
                     const tAction = document.createElement("textarea");
                     tAction.id = "instActionList";
                     tAction.placeholder = "Action (Num - Action)";
                     tAction.style.cssText =
-                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:6px;";
+                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
                     tAction.value = formatPaoList(actionList);
                     taSection.appendChild(tAction);
+                    const sAction = document.createElement("div");
+                    sAction.id = "instActionStatus";
+                    sAction.className = "inst-validation";
+                    taSection.appendChild(sAction);
+
                     const tObject = document.createElement("textarea");
                     tObject.id = "instObjectList";
                     tObject.placeholder = "Object (Num - Object)";
@@ -6204,9 +6496,25 @@
                         "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;";
                     tObject.value = formatPaoList(objectList);
                     taSection.appendChild(tObject);
+                    const sObject = document.createElement("div");
+                    sObject.id = "instObjectStatus";
+                    sObject.className = "inst-validation";
+                    taSection.appendChild(sObject);
                     body.appendChild(taSection);
 
-                    // Initial visibility + onchange
+                    // Show an Excel status note if a file is already loaded
+                    const exStatus = document.getElementById("instExcelStatus");
+                    if (exStatus) {
+                        if (instExcelLoaded) {
+                            exStatus.textContent = "✓ Excel loaded";
+                            exStatus.className = "anki-status loaded";
+                        } else {
+                            exStatus.textContent = "No file selected.";
+                            exStatus.className = "anki-status";
+                        }
+                    }
+
+                    // Initial visibility + onchange + validation
                     const update = () => {
                         const sel = document.querySelector(
                             'input[name="instPaoSource"]:checked',
@@ -6214,6 +6522,8 @@
                         const v = sel ? sel.value : paoDataSource;
                         excelSection.style.display = v === "excel" ? "" : "none";
                         taSection.style.display = v === "textarea" ? "" : "none";
+                        // Update the Next button state for this step
+                        _installerUpdateNextButton();
                     };
                     setTimeout(() => {
                         document
@@ -6221,17 +6531,44 @@
                             .forEach((r) =>
                                 r.addEventListener("change", update),
                             );
-                        // Live textareas: parse on each input and persist
-                        const onTaInput = (id, setter) => {
+                        // Live textareas: parse + validate on each input
+                        const onTaInput = (id, setter, statusId) => {
                             const el = document.getElementById(id);
-                            if (el)
-                                el.addEventListener("input", () =>
-                                    setter(parsePaoList(el.value)),
+                            const statusEl = statusId
+                                ? document.getElementById(statusId)
+                                : null;
+                            if (!el) return;
+                            el.addEventListener("input", () => {
+                                const m = parsePaoList(el.value);
+                                setter(m);
+                                const result = _validatePaoLists(
+                                    id === "instPersonList"
+                                        ? m
+                                        : personList,
+                                    id === "instActionList"
+                                        ? m
+                                        : actionList,
+                                    id === "instObjectList"
+                                        ? m
+                                        : objectList,
                                 );
+                                const which =
+                                    id === "instPersonList"
+                                        ? "person"
+                                        : id === "instActionList"
+                                          ? "action"
+                                          : "object";
+                                _applyPaoValidationUi(
+                                    el,
+                                    statusEl,
+                                    result[which],
+                                );
+                                _installerUpdateNextButton();
+                            });
                         };
-                        onTaInput("instPersonList", (m) => (personList = m));
-                        onTaInput("instActionList", (m) => (actionList = m));
-                        onTaInput("instObjectList", (m) => (objectList = m));
+                        onTaInput("instPersonList", (m) => (personList = m), "instPersonStatus");
+                        onTaInput("instActionList", (m) => (actionList = m), "instActionStatus");
+                        onTaInput("instObjectList", (m) => (objectList = m), "instObjectStatus");
                         // Reuse the existing Excel handler by re-pointing the file
                         const ex = document.getElementById("instExcelUpload");
                         if (ex) {
@@ -6245,8 +6582,7 @@
                                         dt.items.add(e.target.files[0]);
                                     real.files = dt.files;
                                     real.dispatchEvent(new Event("change"));
-                                    // Also push the value back to the textarea view
-                                    // so the user sees what was parsed.
+                                    // Push parsed values back into the textareas
                                     const tPerson =
                                         document.getElementById("instPersonList");
                                     const tAction =
@@ -6299,10 +6635,36 @@
                 function renderInstallerPaoRanges(body) {
                     body.appendChild(
                         _installerP(
-                            "Mode auto-switches based on current digit position.",
+                            "Pick which PAO mode(s) the app should use.",
                         ),
                     );
+                    // 2-2-2 / 3-2-3 / Both radio
+                    const radioRow = document.createElement("div");
+                    radioRow.className = "setting-row";
+                    radioRow.style.cssText =
+                        "justify-content: space-around; margin-bottom: 10px;";
+                    radioRow.innerHTML = `
+                        <label><input type="radio" name="instPaoRangeMode" value="222" ${
+                            paoRangeMode === "222" ? "checked" : ""
+                        }> 2-2-2</label>
+                        <label><input type="radio" name="instPaoRangeMode" value="323" ${
+                            paoRangeMode === "323" ? "checked" : ""
+                        }> 3-2-3</label>
+                        <label><input type="radio" name="instPaoRangeMode" value="both" ${
+                            paoRangeMode === "both" ? "checked" : ""
+                        }> Both</label>`;
+                    body.appendChild(radioRow);
+
+                    // Locked-mode status line (shown when single-mode)
+                    const lockedMsg = document.createElement("div");
+                    lockedMsg.id = "instPaoRangeLockedMsg";
+                    lockedMsg.style.cssText =
+                        "display:none;font-size:0.8rem;color:var(--modal-text-muted);margin:4px 0 8px 0;";
+                    body.appendChild(lockedMsg);
+
+                    // Range rows (hidden in single-mode)
                     const r222 = document.createElement("div");
+                    r222.id = "instPaoRange222Row";
                     r222.className = "setting-row";
                     r222.innerHTML = `<label style="min-width:90px">2-2-2 from:</label>
                         <input type="number" id="inst222Start" min="1" value="${range222Start}" inputmode="numeric" class="short-input">
@@ -6310,6 +6672,7 @@
                         <input type="number" id="inst222End" min="1" value="${range222End}" inputmode="numeric" class="short-input">`;
                     body.appendChild(r222);
                     const r323 = document.createElement("div");
+                    r323.id = "instPaoRange323Row";
                     r323.className = "setting-row";
                     r323.innerHTML = `<label style="min-width:90px">3-2-3 from:</label>
                         <input type="number" id="inst323Start" min="1" value="${range323Start}" inputmode="numeric" class="short-input">
@@ -6317,16 +6680,76 @@
                         <input type="number" id="inst323End" min="1" value="${range323End}" inputmode="numeric" class="short-input">
                         <span style="color:var(--modal-text-muted);font-size:0.85rem;margin-left:2px" title="Capped at the total pi digits in this app">(max: 10000)</span>`;
                     body.appendChild(r323);
+
+                    // Wire radio changes + show/hide range rows
+                    setTimeout(() => {
+                        const update = () => {
+                            const sel = document.querySelector(
+                                'input[name="instPaoRangeMode"]:checked',
+                            );
+                            const v = sel ? sel.value : paoRangeMode;
+                            const r222El = document.getElementById(
+                                "instPaoRange222Row",
+                            );
+                            const r323El = document.getElementById(
+                                "instPaoRange323Row",
+                            );
+                            const msg = document.getElementById(
+                                "instPaoRangeLockedMsg",
+                            );
+                            if (r222El) r222El.style.display = "";
+                            if (r323El) r323El.style.display = "";
+                            if (msg) {
+                                msg.style.display = "none";
+                                msg.textContent = "";
+                            }
+                            if (v === "222") {
+                                if (r323El) r323El.style.display = "none";
+                                if (msg) {
+                                    msg.textContent = `2-2-2 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                                    msg.style.display = "";
+                                }
+                            } else if (v === "323") {
+                                if (r222El) r222El.style.display = "none";
+                                if (msg) {
+                                    msg.textContent = `3-2-3 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                                    msg.style.display = "";
+                                }
+                            }
+                        };
+                        document
+                            .querySelectorAll(
+                                'input[name="instPaoRangeMode"]',
+                            )
+                            .forEach((r) =>
+                                r.addEventListener("change", update),
+                            );
+                        update();
+                    }, 0);
                 }
                 function _saveInstallerPaoRanges() {
-                    const s = document.getElementById("inst222Start");
-                    const e = document.getElementById("inst222End");
-                    const s3 = document.getElementById("inst323Start");
-                    const e3 = document.getElementById("inst323End");
-                    if (s) range222Start = parseInt(s.value) || 1;
-                    if (e) range222End = parseInt(e.value) || 3000;
-                    if (s3) range323Start = parseInt(s3.value) || 3001;
-                    if (e3) range323End = parseInt(e3.value) || 10000;
+                    // Read the mode radio
+                    const sel = document.querySelector(
+                        'input[name="instPaoRangeMode"]:checked',
+                    );
+                    if (sel) paoRangeMode = sel.value;
+                    if (paoRangeMode === "both") {
+                        const s = document.getElementById("inst222Start");
+                        const e = document.getElementById("inst222End");
+                        const s3 = document.getElementById("inst323Start");
+                        const e3 = document.getElementById("inst323End");
+                        if (s) range222Start = parseInt(s.value) || 1;
+                        if (e) range222End = parseInt(e.value) || 3000;
+                        if (s3) range323Start = parseInt(s3.value) || 3001;
+                        if (e3) range323End = parseInt(e3.value) || 10000;
+                    } else {
+                        // Locked to 1..PI_DIGITS.length for the chosen mode
+                        range222Start = 1;
+                        range222End = PI_DIGITS.length;
+                        range323Start = 1;
+                        range323End = PI_DIGITS.length;
+                    }
+                    _applyPaoRangeMode();
                     // Mirror into the settings inputs
                     const sS = document.getElementById("range222Start");
                     const sE = document.getElementById("range222End");
