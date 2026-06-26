@@ -1155,9 +1155,13 @@ input[type="text"]#piInput:focus {
 .stats-goal-editor label {
     font-size: 0.85rem;
     color: var(--stats-text-muted);
+    flex: 0 0 auto;
 }
 .stats-goal-editor input {
     width: 90px;
+    min-width: 90px;
+    max-width: 90px;
+    flex: 0 0 auto;
     padding: 6px;
     border: 1px solid var(--stats-border);
     border-radius: 5px;
@@ -1168,6 +1172,7 @@ input[type="text"]#piInput:focus {
 .stats-goal-unit {
     font-size: 0.82rem;
     color: var(--stats-text-faint);
+    flex: 0 0 auto;
 }
 .excel-columns-grid {
     display: grid;
@@ -1857,4 +1862,5 @@ input[type="text"]#piInput:focus {
     height: 24px;
     line-height: 1;
     box-sizing: border-box;
+    flex: 0 0 auto;
 }

@@ -498,7 +498,7 @@
                                 id="range323End"
                                 class="short-input"
                                 min="1"
-                                value="10000"
+                                value="9999"
                                 inputmode="numeric"
                             />
                             <span
@@ -511,6 +511,15 @@
                                 >(max: 10000)</span
                             >
                         </div>
+                        <div
+                            id="paoRangeClampNote"
+                            style="
+                                display: none;
+                                font-size: 0.78rem;
+                                color: #b45309;
+                                margin: 8px 0 0 0;
+                            "
+                        ></div>
                     </fieldset>
 
                     <fieldset>
@@ -1958,6 +1967,8 @@
                         class="stats-color-scheme-section"
                         style="
                             margin-top: 16px;
+                            padding-top: 16px;
+                            border-top: 1px solid var(--stats-border);
                             display: flex;
                             align-items: center;
                             justify-content: center;
@@ -1969,9 +1980,10 @@
                             style="
                                 font-size: 0.78rem;
                                 color: var(--stats-text-muted);
+                                flex: 0 0 auto;
                             "
                         >
-                            Heatmap &amp; pi coverage colour scheme:
+                            Colour scheme:
                         </label>
                         <select
                             id="heatmapSchemeSelect"

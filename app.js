@@ -201,6 +201,38 @@
                 //     object:  { ok, missing[], extra[], blankTerms[], has3 },
                 //     require3: <bool>  // true if any PO key is 3+ digits
                 //   }
+                // ── PAO range auto-clamp ──
+                // The 2-2-2 and 3-2-3 ranges must not overlap. If the user
+                // edits one side past the other, we auto-shift the other
+                // side and return a human-readable note. Returns:
+                //   { range222Start, range222End, range323Start, range323End, note }
+                // (note is "" if nothing was clamped.)
+                function _clampPaoRanges(s222, e222, s323, e323, edited) {
+                    let note = "";
+                    if (edited === "e222") {
+                        // Bumping 2-2-2 end past 3-2-3 start → push 3-2-3 start
+                        if (e222 >= s323) {
+                            s323 = e222 + 1;
+                            note = `Auto-adjusted 3-2-3 start to ${s323} to avoid overlap.`;
+                        }
+                    } else if (edited === "s323") {
+                        // Dropping 3-2-3 start below 2-2-2 end → pull 2-2-2 end
+                        if (s323 <= e222) {
+                            e222 = s323 - 1;
+                            note = `Auto-adjusted 2-2-2 end to ${e222} to avoid overlap.`;
+                        }
+                    }
+                    // Always also push 3-2-3 end past 3-2-3 start (sanity)
+                    if (e323 < s323) e323 = s323;
+                    return {
+                        range222Start: s222,
+                        range222End: e222,
+                        range323Start: s323,
+                        range323End: e323,
+                        note,
+                    };
+                }
+
                 function _validatePaoLists(p, a, o) {
                     const allKeys = (m) => Object.keys(m || {});
                     const has3 = (m) => allKeys(m).some((k) => k.length >= 3);
@@ -323,6 +355,61 @@
                         document.getElementById("objectListStatus"),
                         r.object,
                     );
+                }
+
+                // Same idea for the installer's textareas (IDs differ).
+                // Called from the radio change handler and after an Excel
+                // upload so the green/red borders reflect the current state.
+                function _updateInstallerPaoValidation() {
+                    const r = _validatePaoLists(
+                        personList,
+                        actionList,
+                        objectList,
+                    );
+                    _applyPaoValidationUi(
+                        document.getElementById("instPersonList"),
+                        document.getElementById("instPersonStatus"),
+                        r.person,
+                    );
+                    _applyPaoValidationUi(
+                        document.getElementById("instActionList"),
+                        document.getElementById("instActionStatus"),
+                        r.action,
+                    );
+                    _applyPaoValidationUi(
+                        document.getElementById("instObjectList"),
+                        document.getElementById("instObjectStatus"),
+                        r.object,
+                    );
+                }
+
+                // Push the current state of the PAO maps into the
+                // installer's three textareas. Called after an Excel
+                // upload so the user sees the parsed data when they
+                // switch to the Textarea option.
+                function _syncInstallerTextareasFromMaps() {
+                    const tPerson = document.getElementById("instPersonList");
+                    const tAction = document.getElementById("instActionList");
+                    const tObject = document.getElementById("instObjectList");
+                    // Use the in-memory `personList` / etc. — those are
+                    // updated by saveSettings (textarea path) OR by the
+                    // Excel handler (excel*List maps). We copy the
+                    // excel maps into the regular maps first so both
+                    // sources are reflected.
+                    if (tPerson) tPerson.value = formatPaoList(personList);
+                    if (tAction) tAction.value = formatPaoList(actionList);
+                    if (tObject) tObject.value = formatPaoList(objectList);
+                }
+
+                // Push the Excel maps (excelPersonList etc.) into the
+                // installer's three textareas, and copy them into the
+                // live personList/actionList/objectList so validation
+                // runs against the same data the user sees.
+                function _syncInstallerTextareasFromExcel() {
+                    personList = { ...excelPersonList };
+                    actionList = { ...excelActionList };
+                    objectList = { ...excelObjectList };
+                    _syncInstallerTextareasFromMaps();
                 }
 
                 // ── Daily Goal / Stats ──
@@ -621,7 +708,7 @@
                 let range222Start = 1,
                     range222End = 3000;
                 let range323Start = 3001;
-                let range323End = 10000;
+                let range323End = 9999;
                 // "222" | "323" | "both" — when a single mode is selected,
                 // the app uses that mode for all positions and the range
                 // is locked to 1..PI_DIGITS.length.
@@ -1431,7 +1518,30 @@
                             document.getElementById("range323Start").value,
                         ) || 3001;
                     const r323e = document.getElementById("range323End");
-                    if (r323e) range323End = parseInt(r323e.value) || 10000;
+                    if (r323e) range323End = parseInt(r323e.value) || 9999;
+                    // Auto-clamp to keep the two ranges non-overlapping
+                    if (range222End >= range323Start) {
+                        const fixed = _clampPaoRanges(
+                            range222Start,
+                            range222End,
+                            range323Start,
+                            range323End,
+                            "e222",
+                        );
+                        range222Start = fixed.range222Start;
+                        range222End = fixed.range222End;
+                        range323Start = fixed.range323Start;
+                        range323End = fixed.range323End;
+                        // Show the clamp note in the settings
+                        const note = document.getElementById("paoRangeClampNote");
+                        if (note) {
+                            note.textContent = fixed.note;
+                            note.style.display = "";
+                        }
+                    } else {
+                        const note = document.getElementById("paoRangeClampNote");
+                        if (note) note.style.display = "none";
+                    }
                     // PAO range mode radio (222 / 323 / both)
                     const rmodeEl = document.querySelector(
                         'input[name="paoRangeMode"]:checked',
@@ -5193,6 +5303,66 @@
                             }),
                         );
 
+                    // Live clamp on the four range inputs (in Both mode):
+                    // auto-adjusts the opposite side if the user creates
+                    // an overlap and shows a small inline note.
+                    const liveClampRanges = () => {
+                        if (paoRangeMode !== "both") return;
+                        const s = parseInt(
+                            document.getElementById("range222Start")?.value,
+                        );
+                        const e = parseInt(
+                            document.getElementById("range222End")?.value,
+                        );
+                        const s3 = parseInt(
+                            document.getElementById("range323Start")?.value,
+                        );
+                        const e3 = parseInt(
+                            document.getElementById("range323End")?.value,
+                        );
+                        if ([s, e, s3, e3].some((v) => isNaN(v))) return;
+                        if (e >= s3) {
+                            const fixed = _clampPaoRanges(
+                                s,
+                                e,
+                                s3,
+                                e3,
+                                "e222",
+                            );
+                            if (fixed.range323Start !== s3) {
+                                document.getElementById(
+                                    "range323Start",
+                                ).value = fixed.range323Start;
+                            }
+                            if (fixed.range323End !== e3) {
+                                document.getElementById(
+                                    "range323End",
+                                ).value = fixed.range323End;
+                            }
+                            const note = document.getElementById(
+                                "paoRangeClampNote",
+                            );
+                            if (note) {
+                                note.textContent = fixed.note;
+                                note.style.display = "";
+                            }
+                        } else {
+                            const note = document.getElementById(
+                                "paoRangeClampNote",
+                            );
+                            if (note) note.style.display = "none";
+                        }
+                    };
+                    [
+                        "range222Start",
+                        "range222End",
+                        "range323Start",
+                        "range323End",
+                    ].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el) el.addEventListener("input", liveClampRanges);
+                    });
+
                     // Anki TXT Upload
                     document.getElementById("ankiTxtUpload").onchange = (e) => {
                         const f = e.target.files[0];
@@ -5573,6 +5743,15 @@
                             excelObjectList = tO;
                             saveSettings();
                             instExcelLoaded = true;
+                            // Also push the parsed values into the
+                            // installer textareas (in case the user
+                            // opens / re-opens the installer later) and
+                            // re-apply the validation UI so the green/red
+                            // borders are immediately visible.
+                            if (typeof _syncInstallerTextareasFromExcel === "function")
+                                _syncInstallerTextareasFromExcel();
+                            if (typeof _updateInstallerPaoValidation === "function")
+                                _updateInstallerPaoValidation();
                             if (typeof _installerUpdateNextButton === "function")
                                 _installerUpdateNextButton();
                             const exStatus = document.getElementById(
@@ -5653,6 +5832,19 @@
 
                     // Hotkeys
                     document.addEventListener("keydown", (e) => {
+                        // While the setup installer is open, suppress
+                        // all hotkeys so the user can type into its
+                        // textareas without triggering things like
+                        // Everest (E) or Hint (W) on the page behind.
+                        const installerEl =
+                            document.getElementById("welcomeModal");
+                        if (
+                            installerEl &&
+                            installerEl.style.display === "flex"
+                        ) {
+                            return;
+                        }
+
                         const statsModalEl =
                             document.getElementById("statsModal");
                         const srsSettingsModalEl =
@@ -6522,6 +6714,16 @@
                         const v = sel ? sel.value : paoDataSource;
                         excelSection.style.display = v === "excel" ? "" : "none";
                         taSection.style.display = v === "textarea" ? "" : "none";
+                        // If we're showing the textareas, sync them from
+                        // the Excel maps (in case the user uploaded an
+                        // Excel file before switching) and apply validation
+                        // so the green/red borders reflect the current data.
+                        if (v === "textarea") {
+                            if (instExcelLoaded) {
+                                _syncInstallerTextareasFromExcel();
+                            }
+                            _updateInstallerPaoValidation();
+                        }
                         // Update the Next button state for this step
                         _installerUpdateNextButton();
                     };
@@ -6662,6 +6864,13 @@
                         "display:none;font-size:0.8rem;color:var(--modal-text-muted);margin:4px 0 8px 0;";
                     body.appendChild(lockedMsg);
 
+                    // Clamp note (shown if the two ranges overlap)
+                    const clampNote = document.createElement("div");
+                    clampNote.id = "instPaoRangeClampNote";
+                    clampNote.style.cssText =
+                        "display:none;font-size:0.78rem;color:#b45309;margin:8px 0 0 0;";
+                    body.appendChild(clampNote);
+
                     // Range rows (hidden in single-mode)
                     const r222 = document.createElement("div");
                     r222.id = "instPaoRange222Row";
@@ -6724,6 +6933,65 @@
                             .forEach((r) =>
                                 r.addEventListener("change", update),
                             );
+                        // Live clamp on the range inputs so the user
+                        // sees the auto-adjustment before clicking Next.
+                        const liveClamp = () => {
+                            if (paoRangeMode !== "both") return;
+                            const s = parseInt(
+                                document.getElementById("inst222Start")?.value,
+                            );
+                            const e = parseInt(
+                                document.getElementById("inst222End")?.value,
+                            );
+                            const s3 = parseInt(
+                                document.getElementById("inst323Start")?.value,
+                            );
+                            const e3 = parseInt(
+                                document.getElementById("inst323End")?.value,
+                            );
+                            if (
+                                [s, e, s3, e3].some((v) => isNaN(v))
+                            )
+                                return;
+                            if (e >= s3) {
+                                const fixed = _clampPaoRanges(
+                                    s,
+                                    e,
+                                    s3,
+                                    e3,
+                                    "e222",
+                                );
+                                if (
+                                    fixed.range323Start !== s3 ||
+                                    fixed.range222End !== e
+                                ) {
+                                    document.getElementById(
+                                        "inst323Start",
+                                    ).value = fixed.range323Start;
+                                    const note = document.getElementById(
+                                        "instPaoRangeClampNote",
+                                    );
+                                    if (note) {
+                                        note.textContent = fixed.note;
+                                        note.style.display = "";
+                                    }
+                                }
+                            } else {
+                                const note = document.getElementById(
+                                    "instPaoRangeClampNote",
+                                );
+                                if (note) note.style.display = "none";
+                            }
+                        };
+                        [
+                            "inst222Start",
+                            "inst222End",
+                            "inst323Start",
+                            "inst323End",
+                        ].forEach((id) => {
+                            const el = document.getElementById(id);
+                            if (el) el.addEventListener("input", liveClamp);
+                        });
                         update();
                     }, 0);
                 }
@@ -6741,7 +7009,33 @@
                         if (s) range222Start = parseInt(s.value) || 1;
                         if (e) range222End = parseInt(e.value) || 3000;
                         if (s3) range323Start = parseInt(s3.value) || 3001;
-                        if (e3) range323End = parseInt(e3.value) || 10000;
+                        if (e3) range323End = parseInt(e3.value) || 9999;
+                        // Auto-clamp to keep the two ranges non-overlapping
+                        if (range222End >= range323Start) {
+                            const fixed = _clampPaoRanges(
+                                range222Start,
+                                range222End,
+                                range323Start,
+                                range323End,
+                                "e222",
+                            );
+                            range222Start = fixed.range222Start;
+                            range222End = fixed.range222End;
+                            range323Start = fixed.range323Start;
+                            range323End = fixed.range323End;
+                            const note = document.getElementById(
+                                "instPaoRangeClampNote",
+                            );
+                            if (note) {
+                                note.textContent = fixed.note;
+                                note.style.display = "";
+                            }
+                        } else {
+                            const note = document.getElementById(
+                                "instPaoRangeClampNote",
+                            );
+                            if (note) note.style.display = "none";
+                        }
                     } else {
                         // Locked to 1..PI_DIGITS.length for the chosen mode
                         range222Start = 1;

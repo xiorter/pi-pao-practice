@@ -1,234 +1,137 @@
 # Pi PAO Practice 🥧
 
-A browser-based practice tool for memorising the digits of **pi** (or any long number) using the **PAO (Person-Action-Object)** memory system, combined with a **mind-palace** approach (pins across a neighbourhood in Google Earth).
+A browser-based tool for memorising the digits of **pi** (or any long number) using the **PAO (Person-Action-Object)** memory system and spaced repetition.
 
 ➡️ **[Try it live →](https://xiorter.github.io/pi-pao-practice/)**
 
-![](./docs/screenshot-hero.png)
+---
+
+## Background
+
+If you're new to memory techniques, three concepts underpin this app:
+
+- **PAO system** — maps groups of digits to vivid Person-Action-Object images you chain into scenes. [What is PAO?](https://artofmemory.com/blog/pao-system/)
+- **Mind palace** — a familiar route or place where you "store" those scenes for later recall. [How to build a memory palace.](https://artofmemory.com/blog/how-to-build-a-memory-palace/)
+- **Major system** — a phonetic code that converts digits into consonant sounds, making it easier to invent memorable words for each number. [How the major system works.](https://artofmemory.com/blog/major-system/)
+
+The sample PAO list included in this repo is loosely based on the major system — it's the primary guide for 2-digit entries and a starting point for 3-digit ones — but it makes plenty of deliberate exceptions. For example, 3-digit objects for 000–099 are chemical elements ordered by atomic number (using [John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html) as a reference), and some entries follow number-shape logic rather than phonetics. Treat the sample as a starting point and personalise it freely.
 
 ---
 
-## What is PAO?
+## Two modes
 
-The **Person-Action-Object** system maps small groups of digits to vivid images you can chain into a story:
+| Mode | Chunk structure | Digits per chunk |
+|---|---|---|
+| **2-2-2 (Century)** | Person (2) · Action (2) · Object (2) | 6 |
+| **3-2-3 (Millennium)** | Person (3) · Action (2) · Object (3) | 8 |
 
-- **2-2-2 mode** — Person (2 digits) · Action (2 digits) · Object (2 digits). One chunk = 6 digits.
-- **3-2-3 mode** — Person (3 digits) · Action (2 digits) · Object (3 digits). One chunk = 8 digits.
-- The **Action list is shared** between the two modes: the 2-digit action key (00–99) means the same action whether you're in 2-2-2 or 3-2-3.
-- The app auto-switches between 2-2-2 and 3-2-3 based on the digit position (configurable in **Settings → PAO Ranges**).
-
-By visualising `Person → Action → Object` for each chunk, a stream of digits becomes a story you can recall. The **mind-palace** technique — placing those images at familiar locations (the author uses pins across his neighbourhood in Google Earth) — makes recall nearly automatic.
-
-This app is the **practice surface**: type digits, reveal the image, get tested with SRS flashcards, track your coverage, and run drills.
+The action list is shared between both modes. The app auto-switches between modes by digit position (configurable in **Settings → PAO Ranges**). Most people start with 2-2-2 and add 3-2-3 later.
 
 ---
 
 ## Features
 
-- 🥧 **pi digit typing practice** with live coloured feedback and a helper bar
-- 🃏 **SRS (spaced-repetition) flashcards** for the chunks you struggle with
-- 📈 **Heatmaps & stats** — daily goal tracking, yearly activity heatmap, pi-coverage map
-- 🏔️ **Everest mode** — race through as many digits as you can
-- 🌗 **Dark mode**, mobile-friendly layout
-- 🎨 **Customisable colours** — correct/incorrect/accent/background, plus a heatmap colour scheme
-- ☁️ **Optional Firebase sync** — keep your progress across devices (you bring your own free Firebase project)
-- 🔥 **Streaks & daily goals**
-- ⌨️ **Keyboard-driven** for fast practice (see shortcuts below)
-- 💾 Everything stored locally in your browser; no account required
+- 🥧 Digit typing practice with live colour feedback
+- 🃏 Built-in SRS flashcards for chunks you struggle with
+- 📈 Heatmaps and stats — daily goal, yearly activity, pi-coverage map
+- 🏔️ Everest mode — race through as many digits as possible
+- 🌗 Dark mode and mobile-friendly layout
+- 🎨 Customisable colours — correct/incorrect/accent/background
+- ☁️ Optional Firebase sync — bring your own free Firebase project
+- 🔥 Streaks and daily goals
+- ⌨️ Keyboard shortcuts for fast practice
+- 💾 Everything stored locally in your browser — no account required
 
 ---
 
-## Quick start
+## Getting started
 
-A **first-run installer** walks you through the setup the first time you open the app. You can also re-open it anytime via the **?** button at the top of the page.
+Open the app for the first time and the **setup wizard** will walk you through five steps:
 
-The five steps:
+1. **Appearance** — light/dark mode and colour scheme
+2. **PAO source** — load your PAO list from an Excel file (recommended) or paste it into textareas. A sample spreadsheet is at [`samples/sample-pao-system.xlsx`](./samples/sample-pao-system.xlsx)
+3. **PAO ranges** — set which digit positions use 2-2-2 vs 3-2-3
+4. **Anki images** *(optional)* — link images from your Anki deck to each PAO entry. See [Setting up Anki](./docs/SETTING_UP_ANKI.md)
+5. **Cloud sync** *(optional)* — connect a Firebase project to sync progress across devices
 
-1. **Appearance** — light/dark mode, colours (correct, incorrect, accent, background).
-2. **PAO source** — choose how you enter your PAO list: an Excel spreadsheet (recommended) or the raw textareas. A sample Excel is included at [`samples/sample-pao-system.xlsx`](./samples/sample-pao-system.xlsx).
-3. **PAO ranges** — which 2-2-2 and 3-2-3 digit ranges to use.
-4. **Anki images** *(skippable)* — load the `.txt` export from your Anki deck + the Anki media folder (as a folder or a zipped file). If you don't have Anki set up yet, see [Setting up Anki like the author](./docs/SETTING_UP_ANKI.md).
-5. **Cloud sync** *(optional)* — connect a free Firebase project to sync your progress across devices.
-
----
-
-## How the pieces fit together
-
-The app keeps your **PAO terms** and your **Anki image filenames** as two separate data sources, joined by the digit number:
-
-| Source | What it provides | How you provide it |
-|---|---|---|
-| **PAO terms** (Person / Action / Object) | The actual word for each digit pair/triple | Excel upload (recommended) **or** the textarea fields in **Settings → PAO Source** |
-| **Anki image filenames** | Which image file goes with each person/object | The `.txt` Anki export (**File → Export → Notes in Plain Text**) + the Anki `collection.media` folder |
-| **Pi digits** | The number sequence to practice | Built into the app (3000+ digits) |
-
-The `.txt` Anki export is **not** for the PAO terms — it's only the mapping from digit number → image filename. The terms come from your Excel/textarea.
+You can revisit any of these later via **Settings**.
 
 ---
 
-## The Anki export workflow
-
-1. In Anki, open your PAO deck.
-2. **File → Export.**
-3. Choose **"Notes in Plain Text (.txt)"**.
-4. Uncheck **"Include tags"**.
-5. Export.
-
-You'll get a `.txt` like:
-
-```
-#separator:tab
-#html:true
-00	Zeus	Sauce	"<img src=""zeus.jpg"">"	"<img src=""ketchup.jpg"">"
-01	Sid	Seaweed	"<img src=""sid.jpg"">"	"<img src=""seaweed.jpg"">"
-...
-```
-
-Upload it in **Settings → Anki Images**:
-- **Millennium PAO — 3-digit images (.txt)** for 3-digit objects.
-- **Century PAO — 2-digit images (.txt)** for 2-digit objects.
-
-See [Setting up Anki like the author](./docs/SETTING_UP_ANKI.md) for the full setup walkthrough.
-
----
-
-## Loading your media (the Anki media folder)
-
-The app needs the images referenced by your Anki `.txt` export. They come from Anki's `collection.media` folder.
-
-### Option A — Choose the folder (Chrome / Edge desktop only)
-
-In **Settings → Anki Images**, click **"Choose media folder"** and pick the `collection.media` folder (or any folder containing the same image filenames).
-
-### Option B — Upload a `.zip` of the folder (all browsers, incl. iOS Safari & mobile)
-
-Zip up your `collection.media` folder, then click **"Upload media .zip"**. The app extracts it in-browser and stores the images in IndexedDB for instant access on future reloads.
-
-> The filenames in the loaded media **must match** the `<img src="...">` values from your Anki `.txt` export. The app looks up images by exact filename.
-
-> On the hosted site the `media/` folder is **not** shipped (it's typically hundreds of MB and includes your personal images). You always provide your own.
-
----
-
-## PAO source: Excel vs textarea
-
-Under **Settings → PAO Source**, pick one:
+## Loading your PAO list
 
 ### Excel (recommended)
 
-Upload a `.xlsx` with the following column layout (default — configurable in Settings):
+Upload a `.xlsx` using the default column layout below — or change the column mapping in Settings if your file is structured differently.
 
 | Column | Field |
 |---|---|
-| **E** | Number |
-| **F** | 3-digit Person |
-| **G** | 2-digit Action *(shared with 2-2-2 mode)* |
-| **H** | 3-digit Object |
-| **L** | 2-digit Person |
-| **M** | 2-digit Object |
-
-A working sample is at [`samples/sample-pao-system.xlsx`](./samples/sample-pao-system.xlsx). The original data comes from [Maya's Millennium PAO list on the Art of Memory forum](https://forum.artofmemory.com/t/mayas-millenium-pao/32629).
+| E | Number |
+| F | 3-digit Person |
+| G | 2-digit Action (shared) |
+| H | 3-digit Object |
+| L | 2-digit Person |
+| M | 2-digit Object |
 
 ### Textarea
 
-Three textareas (Person / Action / Object), one entry per line. Flexible separators are accepted:
-
-- **Number–term separator:** ` - ` (space-dash-space), tab, comma, colon, or just spaces
-- **Record separator:** newline **or** semicolon (`;`)
-
-Examples (all valid):
-
-```
-00 - Zeus
-01 - Sid
-02 - Santa
-```
-
-```
-00	Zeus	01	Sid	02	Santa
-```
-
-```
-00-Zeus; 01-Sid; 02-Santa
-```
-
-Blank lines and lines starting with `#` are ignored.
+Paste one entry per line into the Person, Action, and Object fields. Flexible separators are accepted: ` - `, tab, comma, colon, or plain spaces. Semicolons can separate records on the same line. Lines starting with `#` are ignored.
 
 ---
 
-## Heatmap & pi-coverage colour scheme
+## Loading Anki images
 
-**Settings → Stats modal → Color scheme** lets you pick:
+The app can display your Anki card images during practice. It needs two things:
 
-- **Ice** (default) — light `#95C8F3` → dark `#0063DE`
-- **Magenta** — the original pink/magenta gradient
+1. **A `.txt` export from your Anki deck** — this maps digit numbers to image filenames. In Anki: **File → Export → Notes in Plain Text → uncheck Include tags → Export**
+2. **Your Anki `collection.media` folder** (or a `.zip` of it) — this is where the actual image files live
 
-The chosen scheme drives both the yearly practice heatmap and the pi-coverage squares. Empty (no data) cells are `#EAEAEA` in light mode and `#222222` in dark mode.
+Load both in **Settings → Anki Images**:
+- *Millennium PAO (.txt)* — for 3-digit entries
+- *Century PAO (.txt)* — for 2-digit entries
+
+Don't have an Anki deck yet? See [Setting up Anki](./docs/SETTING_UP_ANKI.md).
+
+### Getting the media into the app
+
+The app detects your browser and shows the right option automatically. On Chrome and Edge desktop you'll get a folder picker; on Firefox, Safari, and mobile you'll get a zip upload instead. Either way, the images are stored locally in IndexedDB and persist across reloads.
+
+> The folder picker isn't available on all browsers due to a browser API limitation — this is why the zip option exists.
 
 ---
 
 ## Firebase sync (optional)
 
-To sync your progress across devices, plug in a free Firebase project:
+To sync progress across devices:
 
-1. Create a project at [console.firebase.google.com](https://console.firebase.google.com).
-2. Enable **Cloud Firestore** (start in test mode).
-3. Register a **Web app** and copy the config object.
-4. In the app, open **Settings → Cloud Sync**, paste the config JSON, pick a sync code (any string — used to namespace your data), and click **Connect**.
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Enable **Cloud Firestore** in test mode
+3. Register a web app and copy the config object
+4. In **Settings → Cloud Sync**, paste the config and click Connect
 
-The free **Spark** plan is more than enough for personal use.
-
----
-
-## Resources for building your own PAO list
-
-- **[Joel Tagert — Making Memories: Creating a Major PAO](https://joeltagert.blogspot.com/2014/01/making-memories-creating-major-pao.html)** — practical walkthrough of building a PAO system from scratch.
-- **[John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html)** — the classic Major-system-based PAO/memory system this app is built around.
-- **[Maya's Millennium PAO (Art of Memory forum)](https://forum.artofmemory.com/t/mayas-millenium-pao/32629)** — a community-built 1000-entry PAO list, the source of the sample data in this app.
+The free Spark plan is more than enough.
 
 ---
 
-## Keyboard shortcuts
+## Running locally
 
-| Key | Action |
-|---|---|
-| `W` | Hint (highlight next digit) |
-| `N` | Reveal |
-| `I` | Show image |
-| `B` | Browse (list of all positions) |
-| `S` | Stats |
-| `E` | Everest mode |
-| `A` | Add to mistakes |
-| `H` | Mark as Hard |
-| `L` | List mode |
-| `R` | Review (SRS) |
-
----
-
-## Local development
-
-No build step. Just serve the folder:
+No build step needed. Serve the folder with Python:
 
 ```bash
-# Python
 python3 -m http.server 8000
-
-# Or use the included launcher
+# or
 ./launch.sh
 ```
 
-Then open <http://localhost:8000>.
+Then open [http://localhost:8000](http://localhost:8000). A local server is required (rather than opening `index.html` directly) so that images load correctly.
 
 ---
 
-## Browser support
+## Resources
 
-| Feature | Chrome / Edge | Firefox | Safari | iOS Safari | Mobile Chrome |
-|---|---|---|---|---|---|
-| Typing, SRS, stats, heatmap | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Folder picker** (media) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Zip upload** (media) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| IndexedDB persistence | ✅ | ✅ | ✅ | ✅ | ✅ |
+- [Art of Memory forum](https://forum.artofmemory.com) — the main community for memory techniques
+- [Maya's Millennium PAO](https://forum.artofmemory.com/t/mayas-millenium-pao/32629) — the community list the sample data is based on
+- [John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html) — image mnemonics to help remember elements 00-99
 
 ---
 

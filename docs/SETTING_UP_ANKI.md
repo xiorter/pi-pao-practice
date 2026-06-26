@@ -1,90 +1,162 @@
-# Setting up Anki like the author
+# Setting up Anki for Pi PAO Practice
 
-This guide walks you through setting up an Anki deck the way this app expects: a deck with **Person / Action / Object** fields, an image for each person and each object, and a **Notes in Plain Text** export that links numbers to image filenames.
-
-If you already have an Anki PAO deck set up similarly, you can skip this — the app only needs the exported `.txt` file and the media folder.
+This guide picks up where the spreadsheet leaves off. By this point you should have personalised [`samples/sample-pao-system.xlsx`](../samples/sample-pao-system.xlsx) with your own PAO terms.
 
 ---
 
-## 1. Create the deck
+## Which system should I build for?
 
-In Anki, create a new deck (e.g. `PAO`). Add a **Note Type** with these fields:
+| | Century (2-2-2) | Millennium (3-2-3) |
+|---|---|---|
+| Deck size | ~100 persons + ~100 objects | ~1000 persons + ~1000 objects |
+| Digits per chunk | 6 | 8 |
+| Effort to set up | Low | High |
+| Good for | Beginners, or anyone who wants a working system quickly | Advanced memorisers going for large digit counts |
 
-| Field | Content |
+**Recommendation:** start with Century. You can add Millennium later — the app supports both simultaneously.
+
+---
+
+## Step 1 — Create a note type in Anki
+
+Anki stores cards as *notes* with named fields. You need to create a note type before importing.
+
+1. Open Anki. Click **Tools → Manage Note Types → Add**.
+2. Choose **"Add: Basic"** as the starting point and name it `PAO`.
+3. Click **Fields** and set up these fields in order (add or rename as needed):
+
+| Field | What goes here |
 |---|---|
-| `Number` | The chunk key (e.g. `0` for the 2-digit `00`, or `86` for the 3-digit `086`). |
-| `Person` | The person term (e.g. `Zeus`). |
-| `Action` | The action term (e.g. `Sauce`). Used for 2-digit actions. |
-| `Object` | The object term (e.g. `Ketchup`). |
-| `PersonImg` | A reference to the person image (Anki handles this via the media folder). |
-| `ObjectImg` | A reference to the object image. |
-
-A simple Card Template:
-- **Front:** `{{Number}}`
-- **Back:** `{{Person}} {{Action}} {{Object}}` + the two images.
+| `Number` | The digit key (e.g. `00`, `042`) |
+| `Person` | The person name |
+| `Action` | The action word |
+| `Object` | The object word |
+| `PersonImg` | Person image — added card by card after import |
+| `ObjectImg` | Object image — added card by card after import |
 
 ---
 
-## 2. Put images in Anki's `collection.media` folder
+## Step 2 — Set up card templates
 
-Anki stores all card media in a single folder called `collection.media`. On desktop you can open it from Anki's menu: **Tools → Check Media → "Open"** (the folder will open in your file manager).
+In the note type editor, click **Cards**. Create three card types:
 
-Copy your person/object images into `collection.media`. Anki uses exact filenames — `zeus.jpg` referenced as `<img src="zeus.jpg">` must exist as `zeus.jpg` in the folder. The author uses the person's name (or a short slug) as the filename.
+### Card 1: Person Image → Person + Number
 
-> Tip: the export workflow below references images by filename, so keep the filenames simple and consistent. Avoid spaces; prefer `zeus.jpg`, `ketchup.jpg`, etc.
+**Front:**
+```
+{{PersonImg}}
+```
+**Back:**
+```
+{{Person}}<br>
+{{FrontSide}}
+<hr id=answer>
+{{Number}}
+```
+
+### Card 2: Object Image → Object + Number
+
+**Front:**
+```
+{{ObjectImg}}
+```
+**Back:**
+```
+{{Object}}<br>
+{{FrontSide}}
+<hr id=answer>
+{{Number}}
+```
+
+### Card 3: Number → Action
+
+**Front:**
+```
+{{Number}}
+```
+**Back:**
+```
+{{Action}}
+<hr id=answer>
+{{FrontSide}}
+```
+
+> Actions don't have images — a plain text card is enough. The goal is just to keep the action → number association fresh.
 
 ---
 
-## 3. Build your PAO list
+## Step 3 — Import your PAO list into Anki
 
-You can use any of the following resources to design your own Person-Action-Object system. A few good starting points:
+The spreadsheet has two dedicated sheets for import: **Century Import** (2-digit) and **Millennium Import** (3-digit). Each has columns in the order Anki expects: `Number`, `Person`, `Action`, `Object`, `PersonImg`, `ObjectImg`.
 
-- **[Joel Tagert — Making Memories: Creating a Major PAO](https://joeltagert.blogspot.com/2014/01/making-memories-creating-major-pao.html)** — a practical walkthrough of building a PAO system from scratch, with examples.
-- **[John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html)** — the classic Major-system-based PAO/memory system this app is built around.
-- **[Maya's Millennium PAO (Art of Memory forum)](https://forum.artofmemory.com/t/mayas-millenium-pao/32629)** — a community-built 1000-entry PAO list (the source of the sample data in this app).
+Import the sheet(s) you need:
 
-A `samples/sample-pao-system.xlsx` file is included in this repo with the author's column layout you can mirror.
+1. Open `sample-pao-system.xlsx` and go to the **Century Import** or **Millennium Import** sheet.
+2. **File → Save a Copy → CSV UTF-8 (.csv)**. Save it somewhere accessible.
+3. In Anki, click **File → Import** and select the CSV file.
+4. In the import dialog:
+   - Set **Note Type** to `PAO`
+   - Set **Deck** to `Century PAO` or `Millennium PAO` (create the deck first if it doesn't exist)
+   - Map each column to its corresponding field: Column 1 → Number, Column 2 → Person, Column 3 → Action, Column 4 → Object, Column 5 → PersonImg, Column 6 → ObjectImg
+   - Check **"Allow HTML in fields"**
+5. Click **Import**.
+
+> If you want both Century and Millennium, repeat the process — save each sheet as a separate CSV and import into its own deck.
 
 ---
 
-## 4. Export to Notes in Plain Text
+## Step 4 — Add images to your cards
 
-Once your deck is populated, you need the `.txt` file the app reads for image linking:
+The `PersonImg` and `ObjectImg` fields arrive blank after import. You fill them in card by card inside Anki.
 
-1. In Anki's main window, click your `PAO` deck.
-2. **File → Export.**
-3. Choose **"Notes in Plain Text (.txt)"** as the export format.
-4. **Uncheck "Include tags"** (not needed).
-5. Click **Export** and save the file somewhere you can find it.
+Some sample images are provided in [`samples/media/`](../samples/media/) for the entries in the sample PAO list. Copy these into Anki's `collection.media` folder (find it via **Tools → Check Media**, then click the folder path shown).
 
-You'll get a `.txt` that looks like:
+For entries not covered by the sample images — or if you've personalised the list with your own people and objects — you'll need to add images yourself:
+
+1. Open the **Card Browser** in Anki (**Browse** button on the main screen).
+2. Find the card you want to add an image to.
+3. Click into the `PersonImg` or `ObjectImg` field.
+4. Either paste an image from your clipboard, or click the image icon in the editor toolbar to upload from your device.
+
+> The more personal and vivid the image, the better it will stick. Don't worry about having every image immediately — add them as you go.
+
+---
+
+## Step 5 — Export the `.txt` file for use in this app
+
+Once your deck has images, export it so the Pi PAO Practice app can link those images to the right digit positions during practice.
+
+1. In Anki, click **File → Export**.
+2. Choose **"Notes in Plain Text (.txt)"**.
+3. Select your deck (`Century PAO` or `Millennium PAO`).
+4. **Uncheck "Include tags"**.
+5. Click **Export** and save the file.
+
+The output looks like:
 
 ```
 #separator:tab
 #html:true
-00	Zeus	Sauce	"<img src=""zeus.jpg"">"	"<img src=""ketchup.jpg"">"
-01	Sid	Seaweed	"<img src=""sid.jpg"">"	"<img src=""seaweed.jpg"">"
-...
+00	Zeus	Squeezing	Sauce	<img src="zeus.jpg">	<img src="sauce.jpg">
+01	Sid	Sitting	Seaweed	<img src="sid.jpg">	<img src="seaweed.jpg">
 ```
 
-- The leading `#`-lines are headers (ignored by the app).
-- Columns are **tab-separated**: `number \t person \t action \t <personImgHtml> \t <objectImgHtml>`.
-- The `src` values in the `<img>` tags must match filenames in your `collection.media` folder.
+Load this in the app under **Settings → Anki Images**:
+- *Century PAO (.txt)* for the 2-digit export
+- *Millennium PAO (.txt)* for the 3-digit export
 
-In the app:
-- The **3-digit export** (Millennium PAO) covers 3-digit numbers (positions 1–1000 in 3-2-3 mode).
-- The **2-digit export** (Century PAO) covers 2-digit numbers (positions 1–100 in 2-2-2 mode).
-- Either export can be loaded on its own, or both.
+Cards without images yet will just show no image — that's fine. Re-export and reload as you add more.
 
 ---
 
-## 5. Use the media folder in this app
+## Step 6 — Load your media into the app
 
-The app needs access to the images. You have two options:
+The app needs access to the actual image files from `collection.media`.
 
-- **Pick the Anki `collection.media` folder directly** (Chrome/Edge desktop, via the File System Access API).
-- **Zip the `collection.media` folder** and upload the `.zip` (any browser, including mobile Safari).
+In **Settings → Anki Images**, the app shows you the right option for your browser:
+- **Chrome / Edge desktop:** a folder picker lets you point directly to your `collection.media` folder
+- **Other browsers (Firefox, Safari, mobile):** zip up your `collection.media` folder and upload the `.zip` instead
 
-Either way, the filenames in the loaded media must match the `<img src="...">` values from step 4.
+The app stores the images locally in IndexedDB, so they persist across reloads without re-uploading.
 
-That's it — once your `.txt` is loaded and your media folder is reachable, the app links the PAO terms from your Excel/textarea to the images from Anki.
+Once both the `.txt` export and the media are loaded, your images will appear during practice.
