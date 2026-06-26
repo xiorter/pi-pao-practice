@@ -1034,8 +1034,9 @@ input[type="text"]#piInput:focus {
     -moz-appearance: textfield;
 }
 
-/* Hide spinner arrows on the small numeric inputs (display time, PAO ranges).
-   Users type values directly; the spinners are noisy on small inputs. */
+/* Hide spinner arrows on the small numeric inputs (display time, PAO
+   ranges, daily goal, crossover). Users type values directly; the
+   spinners are noisy on small inputs. */
 #helperTime::-webkit-outer-spin-button,
 #helperTime::-webkit-inner-spin-button,
 #range222Start::-webkit-outer-spin-button,
@@ -1045,7 +1046,9 @@ input[type="text"]#piInput:focus {
 #range323Start::-webkit-outer-spin-button,
 #range323Start::-webkit-inner-spin-button,
 #range323End::-webkit-outer-spin-button,
-#range323End::-webkit-inner-spin-button {
+#range323End::-webkit-inner-spin-button,
+#dailyGoalInput::-webkit-outer-spin-button,
+#dailyGoalInput::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
@@ -1053,7 +1056,8 @@ input[type="text"]#piInput:focus {
 #range222Start,
 #range222End,
 #range323Start,
-#range323End {
+#range323End,
+#dailyGoalInput {
     -moz-appearance: textfield;
 }
 .pi-context-row button {
@@ -1184,6 +1188,15 @@ input[type="text"]#piInput:focus {
     justify-content: center;
     padding-top: 16px;
     border-top: 1px solid var(--stats-border);
+    /* The stats modal is a flex column whose children stretch to the
+       cross axis by default — so the colour-scheme row is as wide as
+       the modal, which made the select stretch full-width. Shrink the
+       row to its content width and auto-centre it so the layout
+       matches the daily-goal row above. */
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
 }
 .stats-color-scheme-editor label {
     font-size: 0.85rem;
@@ -1192,6 +1205,7 @@ input[type="text"]#piInput:focus {
 }
 .stats-color-scheme-editor select {
     flex: 0 0 auto;
+    max-width: 160px;
 }
 .excel-columns-grid {
     display: grid;

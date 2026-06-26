@@ -336,7 +336,11 @@
                                 `<div style="margin:2px 0">• ${line}</div>`,
                         )
                         .join("");
-                    summaryEl.style.display = "";
+                    // Use an explicit non-empty value — assigning ""
+                    // removes the inline style and the CSS class
+                    // (.inst-validation-summary { display: none })
+                    // would re-hide the element.
+                    summaryEl.style.display = "block";
                 }
 
                 // Validate the Settings page's Person/Action/Object textareas
