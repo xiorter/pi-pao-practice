@@ -194,32 +194,44 @@
                 }
 
                 // ── PAO textarea validation ──
-                // For Person + Object: if any key in the parsed map has length
-                // ≥ 3 (e.g. "000"), the requirement is 000..999 (1000 entries);
-                // otherwise it's 00..99 (100 entries). Action is always 00..99.
+                // Person + Object can have BOTH 2-digit keys (00-99, used
+                // by 2-2-2 mode) and 3-digit keys (000-999, used by 3-2-3
+                // mode) in the same map. The Excel sample has the same
+                // value under both key lengths (one column per length), so
+                // we must validate them independently — a 2-digit key is
+                // not "unexpected" just because the map also has 3-digit
+                // keys (and vice versa). Action is always 2-digit (shared
+                // between the two modes).
+                //
+                // Only the key lengths that are actually present in the
+                // map are checked. If the map has only 2-digit keys, we
+                // check 00-99 and skip 000-999.
+                //
                 // Returns:
                 //   {
-                //     person:  { ok, missing[], extra[], blankTerms[], has3 },
-                //     action:  { ok, missing[], extra[], blankTerms[] },
-                //     object:  { ok, missing[], extra[], blankTerms[], has3 },
-                //     require3: <bool>  // true if any PO key is 3+ digits
+                //     person2:  { ok, missing[], extra[], blankTerms[] } | null
+                //     person3:  { ok, missing[], extra[], blankTerms[] } | null
+                //     action:   { ok, missing[], extra[], blankTerms[] }
+                //     object2:  { ok, missing[], extra[], blankTerms[] } | null
+                //     object3:  { ok, missing[], extra[], blankTerms[] } | null
+                //     has2, has3: <bool>
                 //   }
                 function _validatePaoLists(p, a, o) {
                     const allKeys = (m) => Object.keys(m || {});
-                    const has3 = (m) => allKeys(m).some((k) => k.length >= 3);
-                    const any3 = has3(p) || has3(o);
+                    const keysByLen = (m, len) =>
+                        allKeys(m).filter((k) => k.length === len);
 
-                    // Build the required set depending on mode
-                    const reqPerson = any3
-                        ? Array.from({ length: 1000 }, (_, i) =>
-                              String(i).padStart(3, "0"),
-                          )
-                        : Array.from({ length: 100 }, (_, i) =>
-                              String(i).padStart(2, "0"),
-                          );
-                    const reqObject = reqPerson; // symmetric
-                    const reqAction = Array.from({ length: 100 }, (_, i) =>
+                    const pHas2 = keysByLen(p, 2).length > 0;
+                    const pHas3 = keysByLen(p, 3).length > 0;
+                    const oHas2 = keysByLen(o, 2).length > 0;
+                    const oHas3 = keysByLen(o, 3).length > 0;
+                    const aHas2 = keysByLen(a, 2).length > 0;
+
+                    const req2 = Array.from({ length: 100 }, (_, i) =>
                         String(i).padStart(2, "0"),
+                    );
+                    const req3 = Array.from({ length: 1000 }, (_, i) =>
+                        String(i).padStart(3, "0"),
                     );
 
                     const validate = (map, required) => {
@@ -244,32 +256,45 @@
                             blankTerms,
                         };
                     };
+                    // If a set isn't present in the map, return null so
+                    // _updatePaoValidationSummary knows to skip it.
+                    const ok = (cond, map, req) =>
+                        cond ? validate(map, req) : null;
 
                     return {
-                        person: validate(p, reqPerson),
-                        action: validate(a, reqAction),
-                        object: validate(o, reqObject),
-                        require3: any3,
+                        person2: ok(pHas2, p, req2),
+                        person3: ok(pHas3, p, req3),
+                        action: aHas2 ? validate(a, req2) : { ok: true },
+                        object2: ok(oHas2, o, req2),
+                        object3: ok(oHas3, o, req3),
+                        has2: pHas2 || oHas2 || aHas2,
+                        has3: pHas3 || oHas3,
                     };
                 }
 
                 // Apply the red/blue border to an installer or settings
-                // textarea given a validation result. The per-textarea
-                // status line is no longer used — the consolidated summary
-                // (rendered by _updatePaoValidationSummary) replaces it.
-                //   { ok: null } = pristine (untouched) — neutral border
-                //   { ok: true }  = valid — blue border
-                //   { ok: false } = invalid — red border
-                function _applyPaoValidationUi(textareaEl, result) {
+                // textarea given one or more validation results. The
+                // border is green only if every present set is valid; if
+                // any present set is invalid, the border is red. The
+                // per-textarea status line is no longer used — the
+                // consolidated summary (rendered by
+                // _updatePaoValidationSummary) replaces it.
+                //   one or more { ok, missing, ... } | null results
+                function _applyPaoValidationUi(textareaEl, ...results) {
                     if (!textareaEl) return;
                     textareaEl.style.border = "";
-                    if (!result || result.ok === null) return;
-                    if (result.ok) {
-                        textareaEl.style.border =
-                            "1.5px solid var(--accent, #3584E4)";
-                        return;
-                    }
-                    textareaEl.style.border = "1.5px solid #f87171";
+                    // No results (no key lengths present) → neutral border
+                    if (results.length === 0) return;
+                    // Pristine (untouched) — every result is null
+                    if (results.every((r) => r === null)) return;
+                    // Some result is non-null; consider it valid only if
+                    // every non-null result is ok
+                    const ok = results
+                        .filter((r) => r !== null)
+                        .every((r) => r.ok);
+                    textareaEl.style.border = ok
+                        ? "1.5px solid var(--accent, #3584E4)"
+                        : "1.5px solid #f87171";
                 }
 
                 // Build a human-readable list of issues for the consolidated
@@ -315,15 +340,17 @@
                 }
 
                 // Render the consolidated validation summary into the given
-                // summary element. The required-key set (00-99 or 000-999)
-                // is derived from the per-textarea results.
+                // summary element. The Person/Object maps can have
+                // independent 2-digit and 3-digit sets; each present
+                // set is checked and reported separately.
                 function _updatePaoValidationSummary(summaryEl, r) {
                     if (!summaryEl) return;
-                    const required = r.require3 ? "000-999" : "00-99";
                     const issues = [
-                        ..._paoIssuesFor(r.person, "Person", required),
+                        ..._paoIssuesFor(r.person2, "Person (2-digit)", "00-99"),
+                        ..._paoIssuesFor(r.person3, "Person (3-digit)", "000-999"),
                         ..._paoIssuesFor(r.action, "Action", "00-99"),
-                        ..._paoIssuesFor(r.object, "Object", required),
+                        ..._paoIssuesFor(r.object2, "Object (2-digit)", "00-99"),
+                        ..._paoIssuesFor(r.object3, "Object (3-digit)", "000-999"),
                     ];
                     if (issues.length === 0) {
                         summaryEl.textContent = "";
@@ -353,7 +380,8 @@
                     );
                     _applyPaoValidationUi(
                         document.getElementById("personList"),
-                        r.person,
+                        r.person2,
+                        r.person3,
                     );
                     _applyPaoValidationUi(
                         document.getElementById("actionList"),
@@ -361,7 +389,8 @@
                     );
                     _applyPaoValidationUi(
                         document.getElementById("objectList"),
-                        r.object,
+                        r.object2,
+                        r.object3,
                     );
                     _updatePaoValidationSummary(
                         document.getElementById(
@@ -382,7 +411,8 @@
                     );
                     _applyPaoValidationUi(
                         document.getElementById("instPersonList"),
-                        r.person,
+                        r.person2,
+                        r.person3,
                     );
                     _applyPaoValidationUi(
                         document.getElementById("instActionList"),
@@ -390,7 +420,8 @@
                     );
                     _applyPaoValidationUi(
                         document.getElementById("instObjectList"),
-                        r.object,
+                        r.object2,
+                        r.object3,
                     );
                     _updatePaoValidationSummary(
                         document.getElementById(
@@ -6425,8 +6456,18 @@
                                 actionList,
                                 objectList,
                             );
-                            canProceed =
-                                r.person.ok && r.action.ok && r.object.ok;
+                            // Each present key set (2-digit / 3-digit)
+                            // must be valid for Next to be enabled.
+                            const sets = [
+                                r.person2,
+                                r.person3,
+                                r.action,
+                                r.object2,
+                                r.object3,
+                            ];
+                            canProceed = sets
+                                .filter((s) => s !== null)
+                                .every((s) => s.ok);
                         }
                     }
                     nextBtn.disabled = !canProceed;

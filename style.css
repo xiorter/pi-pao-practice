@@ -1148,13 +1148,24 @@ input[type="text"]#piInput:focus {
     color: var(--accent);
     font-weight: 600;
 }
+/* Daily goal + colour scheme: one horizontal row at the bottom of
+   the stats modal. On wide screens the two settings sit side by side;
+   on narrow screens they wrap to two stacked rows (no separator
+   between them). */
+.stats-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    padding-top: 16px;
+    border-top: 1px solid var(--stats-border);
+}
 .stats-goal-editor {
     display: flex;
     align-items: center;
     gap: 10px;
     justify-content: center;
-    padding-top: 16px;
-    border-top: 1px solid var(--stats-border);
 }
 .stats-goal-editor label {
     font-size: 0.85rem;
@@ -1179,24 +1190,13 @@ input[type="text"]#piInput:focus {
     flex: 0 0 auto;
 }
 
-/* Colour-scheme section: same look as the daily-goal row above so the
-   two settings line up visually. */
+/* Colour-scheme section — pairs with the daily-goal row above in the
+   shared .stats-settings-row. */
 .stats-color-scheme-editor {
     display: flex;
     align-items: center;
     gap: 10px;
     justify-content: center;
-    padding-top: 16px;
-    border-top: 1px solid var(--stats-border);
-    /* The stats modal is a flex column whose children stretch to the
-       cross axis by default — so the colour-scheme row is as wide as
-       the modal, which made the select stretch full-width. Shrink the
-       row to its content width and auto-centre it so the layout
-       matches the daily-goal row above. */
-    width: fit-content;
-    max-width: 100%;
-    margin-left: auto;
-    margin-right: auto;
 }
 .stats-color-scheme-editor label {
     font-size: 0.85rem;
