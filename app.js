@@ -147,47 +147,50 @@
                 }
 
                 // Reflect the current paoRangeMode in the settings UI:
-                //   "222"   → hide 3-2-3 row, lock 2-2-2 range to 1..N
-                //   "323"   → hide 2-2-2 row, lock 3-2-3 range to 1..N
-                //   "both"  → show both rows, leave range inputs free
-                // (N = PI_DIGITS.length)
+                //   "222"   → 2-2-2 covers all pi digits (no range inputs shown)
+                //   "323"   → 3-2-3 covers all pi digits (no range inputs shown)
+                //   "both"  → 2-2-2 covers 1..crossover, 3-2-3 covers
+                //             crossover+1..PI_DIGITS.length (single input)
+                // crossover is 0-based, so the 2-2-2 chunk index is
+                // rangeCrossover (i.e. 2-2-2 ends at index crossover-1).
                 function _applyPaoRangeMode() {
-                    const r222 = document.getElementById("paoRange222Row");
-                    const r323 = document.getElementById("paoRange323Row");
+                    const rBoth = document.getElementById("paoRangeBothRow");
                     const msg = document.getElementById("paoRangeLockedMsg");
-                    if (r222) r222.style.display = "";
-                    if (r323) r323.style.display = "";
-                    if (msg) msg.style.display = "none";
+                    if (rBoth) rBoth.style.display = "";
+                    if (msg) {
+                        msg.style.display = "none";
+                        msg.textContent = "";
+                    }
                     if (paoRangeMode === "222") {
                         range222Start = 1;
                         range222End = PI_DIGITS.length;
-                        range323Start = 1;
-                        range323End = PI_DIGITS.length;
-                        if (r323) r323.style.display = "none";
+                        range323Start = PI_DIGITS.length + 1;
+                        range323End = PI_DIGITS.length + 1;
+                        if (rBoth) rBoth.style.display = "none";
                         if (msg) {
-                            msg.textContent = `2-2-2 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                            msg.textContent = "2-2-2 mode active. Covers all pi digits in this app.";
                             msg.style.display = "";
                         }
                     } else if (paoRangeMode === "323") {
-                        range222Start = 1;
-                        range222End = PI_DIGITS.length;
+                        range222Start = PI_DIGITS.length + 1;
+                        range222End = PI_DIGITS.length + 1;
                         range323Start = 1;
                         range323End = PI_DIGITS.length;
-                        if (r222) r222.style.display = "none";
+                        if (rBoth) rBoth.style.display = "none";
                         if (msg) {
-                            msg.textContent = `3-2-3 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                            msg.textContent = "3-2-3 mode active. Covers all pi digits in this app.";
                             msg.style.display = "";
                         }
+                    } else {
+                        // "both" — derive the four range vars from the crossover
+                        range222Start = 1;
+                        range222End = rangeCrossover;
+                        range323Start = rangeCrossover + 1;
+                        range323End = PI_DIGITS.length;
                     }
-                    // Mirror the values into the visible range inputs
-                    const sS = document.getElementById("range222Start");
-                    const sE = document.getElementById("range222End");
-                    const sS3 = document.getElementById("range323Start");
-                    const sE3 = document.getElementById("range323End");
-                    if (sS) sS.value = range222Start;
-                    if (sE) sE.value = range222End;
-                    if (sS3) sS3.value = range323Start;
-                    if (sE3) sE3.value = range323End;
+                    // Mirror the crossover value into its input (if visible)
+                    const crossEl = document.getElementById("rangeCrossover");
+                    if (crossEl) crossEl.value = rangeCrossover;
                 }
 
                 // ── PAO textarea validation ──
@@ -201,38 +204,6 @@
                 //     object:  { ok, missing[], extra[], blankTerms[], has3 },
                 //     require3: <bool>  // true if any PO key is 3+ digits
                 //   }
-                // ── PAO range auto-clamp ──
-                // The 2-2-2 and 3-2-3 ranges must not overlap. If the user
-                // edits one side past the other, we auto-shift the other
-                // side and return a human-readable note. Returns:
-                //   { range222Start, range222End, range323Start, range323End, note }
-                // (note is "" if nothing was clamped.)
-                function _clampPaoRanges(s222, e222, s323, e323, edited) {
-                    let note = "";
-                    if (edited === "e222") {
-                        // Bumping 2-2-2 end past 3-2-3 start → push 3-2-3 start
-                        if (e222 >= s323) {
-                            s323 = e222 + 1;
-                            note = `Auto-adjusted 3-2-3 start to ${s323} to avoid overlap.`;
-                        }
-                    } else if (edited === "s323") {
-                        // Dropping 3-2-3 start below 2-2-2 end → pull 2-2-2 end
-                        if (s323 <= e222) {
-                            e222 = s323 - 1;
-                            note = `Auto-adjusted 2-2-2 end to ${e222} to avoid overlap.`;
-                        }
-                    }
-                    // Always also push 3-2-3 end past 3-2-3 start (sanity)
-                    if (e323 < s323) e323 = s323;
-                    return {
-                        range222Start: s222,
-                        range222End: e222,
-                        range323Start: s323,
-                        range323End: e323,
-                        note,
-                    };
-                }
-
                 function _validatePaoLists(p, a, o) {
                     const allKeys = (m) => Object.keys(m || {});
                     const has3 = (m) => allKeys(m).some((k) => k.length >= 3);
@@ -282,18 +253,16 @@
                     };
                 }
 
-                // Apply the red/blue border + status message to an installer
-                // or settings textarea given a validation result.
-                //   { ok: null } = pristine (untouched) — neutral border, no msg
-                //   { ok: true }  = valid — blue border, no msg
-                //   { ok: false } = invalid — red border, error msg
-                function _applyPaoValidationUi(textareaEl, statusEl, result) {
+                // Apply the red/blue border to an installer or settings
+                // textarea given a validation result. The per-textarea
+                // status line is no longer used — the consolidated summary
+                // (rendered by _updatePaoValidationSummary) replaces it.
+                //   { ok: null } = pristine (untouched) — neutral border
+                //   { ok: true }  = valid — blue border
+                //   { ok: false } = invalid — red border
+                function _applyPaoValidationUi(textareaEl, result) {
                     if (!textareaEl) return;
                     textareaEl.style.border = "";
-                    if (statusEl) {
-                        statusEl.textContent = "";
-                        statusEl.style.display = "none";
-                    }
                     if (!result || result.ok === null) return;
                     if (result.ok) {
                         textareaEl.style.border =
@@ -301,35 +270,73 @@
                         return;
                     }
                     textareaEl.style.border = "1.5px solid #f87171";
-                    if (statusEl) {
-                        const bits = [];
-                        if (result.missing && result.missing.length)
-                            bits.push(
-                                `Missing ${result.missing.length} key${
-                                    result.missing.length === 1 ? "" : "s"
-                                }: ${result.missing
-                                    .slice(0, 6)
-                                    .join(", ")}${
-                                    result.missing.length > 6 ? "…" : ""
-                                }`,
-                            );
-                        if (result.extra && result.extra.length)
-                            bits.push(
-                                `${result.extra.length} unexpected key${
-                                    result.extra.length === 1 ? "" : "s"
-                                }: ${result.extra
-                                    .slice(0, 6)
-                                    .join(", ")}`,
-                            );
-                        if (result.blankTerms && result.blankTerms.length)
-                            bits.push(
-                                `${result.blankTerms.length} blank term${
-                                    result.blankTerms.length === 1 ? "" : "s"
-                                }`,
-                            );
-                        statusEl.textContent = bits.join(" · ");
-                        statusEl.style.display = "";
+                }
+
+                // Build a human-readable list of issues for the consolidated
+                // summary shown below the three Person/Action/Object textareas.
+                // Returns an array of strings (one per box that has a problem).
+                function _paoIssuesFor(result, label, required) {
+                    if (!result || result.ok) return [];
+                    const bits = [];
+                    if (result.missing && result.missing.length) {
+                        const sample = result.missing
+                            .slice(0, 8)
+                            .map((k) => `\`${k}\``)
+                            .join(", ");
+                        const more =
+                            result.missing.length > 8
+                                ? ` (+${result.missing.length - 8} more)`
+                                : "";
+                        bits.push(
+                            `${label} textarea doesn't have terms ${required} — missing ${result.missing.length} key${
+                                result.missing.length === 1 ? "" : "s"
+                            }: ${sample}${more}`,
+                        );
                     }
+                    if (result.extra && result.extra.length) {
+                        const sample = result.extra
+                            .slice(0, 8)
+                            .map((k) => `\`${k}\``)
+                            .join(", ");
+                        bits.push(
+                            `${label} textarea has ${result.extra.length} unexpected key${
+                                result.extra.length === 1 ? "" : "s"
+                            }: ${sample}`,
+                        );
+                    }
+                    if (result.blankTerms && result.blankTerms.length) {
+                        bits.push(
+                            `${label} textarea has ${result.blankTerms.length} blank term${
+                                result.blankTerms.length === 1 ? "" : "s"
+                            }`,
+                        );
+                    }
+                    return bits;
+                }
+
+                // Render the consolidated validation summary into the given
+                // summary element. The required-key set (00-99 or 000-999)
+                // is derived from the per-textarea results.
+                function _updatePaoValidationSummary(summaryEl, r) {
+                    if (!summaryEl) return;
+                    const required = r.require3 ? "000-999" : "00-99";
+                    const issues = [
+                        ..._paoIssuesFor(r.person, "Person", required),
+                        ..._paoIssuesFor(r.action, "Action", "00-99"),
+                        ..._paoIssuesFor(r.object, "Object", required),
+                    ];
+                    if (issues.length === 0) {
+                        summaryEl.textContent = "";
+                        summaryEl.style.display = "none";
+                        return;
+                    }
+                    summaryEl.innerHTML = issues
+                        .map(
+                            (line) =>
+                                `<div style="margin:2px 0">• ${line}</div>`,
+                        )
+                        .join("");
+                    summaryEl.style.display = "";
                 }
 
                 // Validate the Settings page's Person/Action/Object textareas
@@ -342,18 +349,21 @@
                     );
                     _applyPaoValidationUi(
                         document.getElementById("personList"),
-                        document.getElementById("personListStatus"),
                         r.person,
                     );
                     _applyPaoValidationUi(
                         document.getElementById("actionList"),
-                        document.getElementById("actionListStatus"),
                         r.action,
                     );
                     _applyPaoValidationUi(
                         document.getElementById("objectList"),
-                        document.getElementById("objectListStatus"),
                         r.object,
+                    );
+                    _updatePaoValidationSummary(
+                        document.getElementById(
+                            "paoTextareaValidationSummary",
+                        ),
+                        r,
                     );
                 }
 
@@ -368,18 +378,21 @@
                     );
                     _applyPaoValidationUi(
                         document.getElementById("instPersonList"),
-                        document.getElementById("instPersonStatus"),
                         r.person,
                     );
                     _applyPaoValidationUi(
                         document.getElementById("instActionList"),
-                        document.getElementById("instActionStatus"),
                         r.action,
                     );
                     _applyPaoValidationUi(
                         document.getElementById("instObjectList"),
-                        document.getElementById("instObjectStatus"),
                         r.object,
+                    );
+                    _updatePaoValidationSummary(
+                        document.getElementById(
+                            "instPaoTextareaValidationSummary",
+                        ),
+                        r,
                     );
                 }
 
@@ -704,14 +717,21 @@
                 let testStartPos = 0; // sequenceStartIndex when test started
                 let testSubmitted = false;
 
-                // PAO range config (1-based digit positions)
-                let range222Start = 1,
-                    range222End = 3000;
-                let range323Start = 3001;
+                // PAO range config. The 2-2-2 and 3-2-3 ranges are derived
+                // from a single crossover point + the current mode:
+                //   "222"   → 2-2-2 covers all pi digits
+                //   "323"   → 3-2-3 covers all pi digits
+                //   "both"  → 2-2-2 covers 1..crossover,
+                //             3-2-3 covers crossover+1..PI_DIGITS.length
+                // The four range222* / range323* vars are kept (and
+                // persisted) for backwards compat with the pi-coverage
+                // rendering and any saved settings from earlier versions.
+                let rangeCrossover = 1000; // 0-based: 2-2-2 ends at index crossover-1
+                let range222Start = 1;
+                let range222End = 1000;
+                let range323Start = 1001;
                 let range323End = 9999;
-                // "222" | "323" | "both" — when a single mode is selected,
-                // the app uses that mode for all positions and the range
-                // is locked to 1..PI_DIGITS.length.
+                // "222" | "323" | "both"
                 let paoRangeMode = "both";
 
                 // Everest state
@@ -1051,8 +1071,18 @@
                     return map;
                 }
                 function formatPaoList(map) {
-                    return Object.entries(map)
-                        .sort(([a], [b]) => a - b)
+                    // Group 2-digit keys (00-99) before 3-digit keys (000-999),
+                    // then sort each group numerically. This avoids the two
+                    // ranges interleaving when both have the same numeric
+                    // value (e.g. "00" and "000" both = 0).
+                    const entries = Object.entries(map);
+                    const twos = entries
+                        .filter(([k]) => k.length === 2)
+                        .sort(([a], [b]) => Number(a) - Number(b));
+                    const threes = entries
+                        .filter(([k]) => k.length === 3)
+                        .sort(([a], [b]) => Number(a) - Number(b));
+                    return [...twos, ...threes]
                         .map(([k, v]) => `${k} - ${v}`)
                         .join("\n");
                 }
@@ -1087,7 +1117,8 @@
                 function getModeForPos(oneBasedPos) {
                     if (paoRangeMode === "222") return "222";
                     if (paoRangeMode === "323") return "323";
-                    return oneBasedPos >= range323Start ? "323" : "222";
+                    // "both": 2-2-2 for positions 1..crossover, 3-2-3 for crossover+1..
+                    return oneBasedPos - 1 < rangeCrossover ? "222" : "323";
                 }
                 function updateAutoMode(oneBasedPos) {
                     currentPAOMode = getModeForPos(oneBasedPos);
@@ -1103,9 +1134,22 @@
                         currentPAOMode = s.currentPAOMode || "222";
                         paoDataSource = s.paoDataSource || "textarea";
                         paoRangeMode = s.paoRangeMode || "both";
+                        // Crossover: 0-based, exclusive — 2-2-2 covers
+                        // positions 1..crossover, 3-2-3 covers crossover+1..
+                        if (typeof s.rangeCrossover === "number") {
+                            rangeCrossover = s.rangeCrossover;
+                        } else {
+                            // Derive from the legacy four vars (if present)
+                            // or fall back to the default.
+                            if (s.range323Start != null) {
+                                rangeCrossover = s.range323Start - 1;
+                            } else {
+                                rangeCrossover = 1000;
+                            }
+                        }
                         range222Start = s.range222Start || 1;
-                        range222End = s.range222End || 3000;
-                        range323Start = s.range323Start || 3001;
+                        range222End = s.range222End || rangeCrossover;
+                        range323Start = s.range323Start || rangeCrossover + 1;
                         everestHighScore = s.everestHighScore || 0;
                         everestHSFrom = s.everestHSFrom || 1;
                         everestHSTo = s.everestHSTo || 3000;
@@ -1222,12 +1266,9 @@
                         );
                         if (rmode) rmode.checked = true;
                         _applyPaoRangeMode();
-                        document.getElementById("range222Start").value =
-                            range222Start;
-                        document.getElementById("range222End").value =
-                            range222End;
-                        document.getElementById("range323Start").value =
-                            range323Start;
+                        // Mirror the crossover into its input (if it exists)
+                        const crossEl = document.getElementById("rangeCrossover");
+                        if (crossEl) crossEl.value = rangeCrossover;
                         personListTextarea.value = formatPaoList(personList);
                         actionListTextarea.value = formatPaoList(actionList);
                         objectListTextarea.value = formatPaoList(objectList);
@@ -1254,9 +1295,10 @@
                         const accEl =
                             document.getElementById("accentColorPicker");
                         if (accEl) accEl.value = accentColor;
-                        const range323EndEl =
-                            document.getElementById("range323End");
-                        if (range323EndEl) range323EndEl.value = range323End;
+                        const rangeCrossoverEl =
+                            document.getElementById("rangeCrossover");
+                        if (rangeCrossoverEl)
+                            rangeCrossoverEl.value = rangeCrossover;
                         const schemeEl =
                             document.getElementById("heatmapSchemeSelect");
                         if (schemeEl) schemeEl.value = heatmapScheme;
@@ -1505,49 +1547,19 @@
                         .getElementById("excelObject2Col")
                         .value.toUpperCase();
 
-                    range222Start =
-                        parseInt(
-                            document.getElementById("range222Start").value,
-                        ) || 1;
-                    range222End =
-                        parseInt(
-                            document.getElementById("range222End").value,
-                        ) || 3000;
-                    range323Start =
-                        parseInt(
-                            document.getElementById("range323Start").value,
-                        ) || 3001;
-                    const r323e = document.getElementById("range323End");
-                    if (r323e) range323End = parseInt(r323e.value) || 9999;
-                    // Auto-clamp to keep the two ranges non-overlapping
-                    if (range222End >= range323Start) {
-                        const fixed = _clampPaoRanges(
-                            range222Start,
-                            range222End,
-                            range323Start,
-                            range323End,
-                            "e222",
-                        );
-                        range222Start = fixed.range222Start;
-                        range222End = fixed.range222End;
-                        range323Start = fixed.range323Start;
-                        range323End = fixed.range323End;
-                        // Show the clamp note in the settings
-                        const note = document.getElementById("paoRangeClampNote");
-                        if (note) {
-                            note.textContent = fixed.note;
-                            note.style.display = "";
-                        }
-                    } else {
-                        const note = document.getElementById("paoRangeClampNote");
-                        if (note) note.style.display = "none";
-                    }
                     // PAO range mode radio (222 / 323 / both)
                     const rmodeEl = document.querySelector(
                         'input[name="paoRangeMode"]:checked',
                     );
                     if (rmodeEl) paoRangeMode = rmodeEl.value || "both";
-                    // In single-mode, lock the range to 1..PI_DIGITS.length
+                    // Crossover: 0-based, exclusive
+                    if (paoRangeMode === "both") {
+                        const crossEl =
+                            document.getElementById("rangeCrossover");
+                        if (crossEl)
+                            rangeCrossover =
+                                parseInt(crossEl.value) || rangeCrossover;
+                    }
                     _applyPaoRangeMode();
                     const schemeEl = document.getElementById(
                         "heatmapSchemeSelect",
@@ -1629,6 +1641,7 @@
                         range222End,
                         range323Start,
                         range323End,
+                        rangeCrossover,
                         paoRangeMode,
                         heatmapScheme,
                         everestHighScore,
@@ -2552,6 +2565,12 @@
                         dailyCreditedMaxLength = val.length; // skip crediting existing digits
                         dailyCreditedAmount = 0;
                         dailyCreditedDate = today;
+                        // Reset today's count to 0 so the display doesn't
+                        // continue showing yesterday's number. Refresh
+                        // the goal bar / stats display immediately.
+                        dailyStats[today] = 0;
+                        if (typeof updateGoalBarOnly === "function")
+                            updateGoalBarOnly();
                     }
                     if (sequenceStartIndex !== dailyCreditedSeqStart) {
                         // Moving to a different position: undo whatever was provisionally
@@ -5303,65 +5322,20 @@
                             }),
                         );
 
-                    // Live clamp on the four range inputs (in Both mode):
-                    // auto-adjusts the opposite side if the user creates
-                    // an overlap and shows a small inline note.
-                    const liveClampRanges = () => {
-                        if (paoRangeMode !== "both") return;
-                        const s = parseInt(
-                            document.getElementById("range222Start")?.value,
-                        );
-                        const e = parseInt(
-                            document.getElementById("range222End")?.value,
-                        );
-                        const s3 = parseInt(
-                            document.getElementById("range323Start")?.value,
-                        );
-                        const e3 = parseInt(
-                            document.getElementById("range323End")?.value,
-                        );
-                        if ([s, e, s3, e3].some((v) => isNaN(v))) return;
-                        if (e >= s3) {
-                            const fixed = _clampPaoRanges(
-                                s,
-                                e,
-                                s3,
-                                e3,
-                                "e222",
-                            );
-                            if (fixed.range323Start !== s3) {
-                                document.getElementById(
-                                    "range323Start",
-                                ).value = fixed.range323Start;
+                    // Live update: when the user edits the crossover input,
+                    // mirror the value into rangeCrossover and re-apply the
+                    // mode (so the four derived range vars stay in sync).
+                    const crossEl =
+                        document.getElementById("rangeCrossover");
+                    if (crossEl) {
+                        crossEl.addEventListener("input", () => {
+                            const v = parseInt(crossEl.value);
+                            if (!isNaN(v)) {
+                                rangeCrossover = v;
+                                _applyPaoRangeMode();
                             }
-                            if (fixed.range323End !== e3) {
-                                document.getElementById(
-                                    "range323End",
-                                ).value = fixed.range323End;
-                            }
-                            const note = document.getElementById(
-                                "paoRangeClampNote",
-                            );
-                            if (note) {
-                                note.textContent = fixed.note;
-                                note.style.display = "";
-                            }
-                        } else {
-                            const note = document.getElementById(
-                                "paoRangeClampNote",
-                            );
-                            if (note) note.style.display = "none";
-                        }
-                    };
-                    [
-                        "range222Start",
-                        "range222End",
-                        "range323Start",
-                        "range323End",
-                    ].forEach((id) => {
-                        const el = document.getElementById(id);
-                        if (el) el.addEventListener("input", liveClampRanges);
-                    });
+                        });
+                    }
 
                     // Anki TXT Upload
                     document.getElementById("ankiTxtUpload").onchange = (e) => {
@@ -5720,7 +5694,9 @@
                                 const raw = row[c.numCol];
                                 if (raw === undefined || raw === null) return;
                                 const n = String(parseInt(raw, 10));
-                                if (!/^\d+$/.test(n)) return;
+                                // Skip non-numeric entries (e.g. section dividers like "-")
+                                // and the explicit "NaN" string from parseInt failures.
+                                if (n === "NaN" || !/^\d+$/.test(n)) return;
                                 const numStr3 = n.padStart(3, "0"),
                                     numStr2 = n.padStart(2, "0");
                                 if (row[c.person3Col])
@@ -6664,10 +6640,6 @@
                         "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
                     tPerson.value = formatPaoList(personList);
                     taSection.appendChild(tPerson);
-                    const sPerson = document.createElement("div");
-                    sPerson.id = "instPersonStatus";
-                    sPerson.className = "inst-validation";
-                    taSection.appendChild(sPerson);
 
                     const tAction = document.createElement("textarea");
                     tAction.id = "instActionList";
@@ -6676,10 +6648,6 @@
                         "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
                     tAction.value = formatPaoList(actionList);
                     taSection.appendChild(tAction);
-                    const sAction = document.createElement("div");
-                    sAction.id = "instActionStatus";
-                    sAction.className = "inst-validation";
-                    taSection.appendChild(sAction);
 
                     const tObject = document.createElement("textarea");
                     tObject.id = "instObjectList";
@@ -6688,10 +6656,12 @@
                         "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;";
                     tObject.value = formatPaoList(objectList);
                     taSection.appendChild(tObject);
-                    const sObject = document.createElement("div");
-                    sObject.id = "instObjectStatus";
-                    sObject.className = "inst-validation";
-                    taSection.appendChild(sObject);
+
+                    // Consolidated validation summary (shown only when invalid)
+                    const instSummary = document.createElement("div");
+                    instSummary.id = "instPaoTextareaValidationSummary";
+                    instSummary.className = "inst-validation-summary";
+                    taSection.appendChild(instSummary);
                     body.appendChild(taSection);
 
                     // Show an Excel status note if a file is already loaded
@@ -6734,43 +6704,19 @@
                                 r.addEventListener("change", update),
                             );
                         // Live textareas: parse + validate on each input
-                        const onTaInput = (id, setter, statusId) => {
+                        const onTaInput = (id, setter) => {
                             const el = document.getElementById(id);
-                            const statusEl = statusId
-                                ? document.getElementById(statusId)
-                                : null;
                             if (!el) return;
                             el.addEventListener("input", () => {
                                 const m = parsePaoList(el.value);
                                 setter(m);
-                                const result = _validatePaoLists(
-                                    id === "instPersonList"
-                                        ? m
-                                        : personList,
-                                    id === "instActionList"
-                                        ? m
-                                        : actionList,
-                                    id === "instObjectList"
-                                        ? m
-                                        : objectList,
-                                );
-                                const which =
-                                    id === "instPersonList"
-                                        ? "person"
-                                        : id === "instActionList"
-                                          ? "action"
-                                          : "object";
-                                _applyPaoValidationUi(
-                                    el,
-                                    statusEl,
-                                    result[which],
-                                );
+                                _updateInstallerPaoValidation();
                                 _installerUpdateNextButton();
                             });
                         };
-                        onTaInput("instPersonList", (m) => (personList = m), "instPersonStatus");
-                        onTaInput("instActionList", (m) => (actionList = m), "instActionStatus");
-                        onTaInput("instObjectList", (m) => (objectList = m), "instObjectStatus");
+                        onTaInput("instPersonList", (m) => (personList = m));
+                        onTaInput("instActionList", (m) => (actionList = m));
+                        onTaInput("instObjectList", (m) => (objectList = m));
                         // Reuse the existing Excel handler by re-pointing the file
                         const ex = document.getElementById("instExcelUpload");
                         if (ex) {
@@ -6864,64 +6810,45 @@
                         "display:none;font-size:0.8rem;color:var(--modal-text-muted);margin:4px 0 8px 0;";
                     body.appendChild(lockedMsg);
 
-                    // Clamp note (shown if the two ranges overlap)
-                    const clampNote = document.createElement("div");
-                    clampNote.id = "instPaoRangeClampNote";
-                    clampNote.style.cssText =
-                        "display:none;font-size:0.78rem;color:#b45309;margin:8px 0 0 0;";
-                    body.appendChild(clampNote);
+                    // Crossover input (only shown in "Both" mode)
+                    const crossRow = document.createElement("div");
+                    crossRow.id = "instPaoRangeBothRow";
+                    crossRow.className = "setting-row";
+                    crossRow.innerHTML = `<label style="min-width:140px">2-2-2 / 3-2-3 crossover at:</label>
+                        <input type="number" id="instRangeCrossover" min="1" max="${
+                            PI_DIGITS.length - 1
+                        }" value="${rangeCrossover}" inputmode="numeric" class="short-input">
+                        <span style="color:var(--modal-text-muted);font-size:0.8rem">(2-2-2 ends at position ${rangeCrossover}, 3-2-3 starts at ${rangeCrossover + 1})</span>`;
+                    body.appendChild(crossRow);
 
-                    // Range rows (hidden in single-mode)
-                    const r222 = document.createElement("div");
-                    r222.id = "instPaoRange222Row";
-                    r222.className = "setting-row";
-                    r222.innerHTML = `<label style="min-width:90px">2-2-2 from:</label>
-                        <input type="number" id="inst222Start" min="1" value="${range222Start}" inputmode="numeric" class="short-input">
-                        <label style="margin:0 4px">to:</label>
-                        <input type="number" id="inst222End" min="1" value="${range222End}" inputmode="numeric" class="short-input">`;
-                    body.appendChild(r222);
-                    const r323 = document.createElement("div");
-                    r323.id = "instPaoRange323Row";
-                    r323.className = "setting-row";
-                    r323.innerHTML = `<label style="min-width:90px">3-2-3 from:</label>
-                        <input type="number" id="inst323Start" min="1" value="${range323Start}" inputmode="numeric" class="short-input">
-                        <label style="margin:0 4px">to:</label>
-                        <input type="number" id="inst323End" min="1" value="${range323End}" inputmode="numeric" class="short-input">
-                        <span style="color:var(--modal-text-muted);font-size:0.85rem;margin-left:2px" title="Capped at the total pi digits in this app">(max: 10000)</span>`;
-                    body.appendChild(r323);
-
-                    // Wire radio changes + show/hide range rows
+                    // Wire radio changes + show/hide crossover input
                     setTimeout(() => {
                         const update = () => {
                             const sel = document.querySelector(
                                 'input[name="instPaoRangeMode"]:checked',
                             );
                             const v = sel ? sel.value : paoRangeMode;
-                            const r222El = document.getElementById(
-                                "instPaoRange222Row",
-                            );
-                            const r323El = document.getElementById(
-                                "instPaoRange323Row",
+                            const crossEl = document.getElementById(
+                                "instPaoRangeBothRow",
                             );
                             const msg = document.getElementById(
                                 "instPaoRangeLockedMsg",
                             );
-                            if (r222El) r222El.style.display = "";
-                            if (r323El) r323El.style.display = "";
+                            if (crossEl) crossEl.style.display = "";
                             if (msg) {
                                 msg.style.display = "none";
                                 msg.textContent = "";
                             }
                             if (v === "222") {
-                                if (r323El) r323El.style.display = "none";
+                                if (crossEl) crossEl.style.display = "none";
                                 if (msg) {
-                                    msg.textContent = `2-2-2 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                                    msg.textContent = `2-2-2 mode active. Covers all pi digits in this app.`;
                                     msg.style.display = "";
                                 }
                             } else if (v === "323") {
-                                if (r222El) r222El.style.display = "none";
+                                if (crossEl) crossEl.style.display = "none";
                                 if (msg) {
-                                    msg.textContent = `3-2-3 mode active. Range locked to 1 → ${PI_DIGITS.length} (the total pi digits in this app).`;
+                                    msg.textContent = `3-2-3 mode active. Covers all pi digits in this app.`;
                                     msg.style.display = "";
                                 }
                             }
@@ -6933,65 +6860,18 @@
                             .forEach((r) =>
                                 r.addEventListener("change", update),
                             );
-                        // Live clamp on the range inputs so the user
-                        // sees the auto-adjustment before clicking Next.
-                        const liveClamp = () => {
-                            if (paoRangeMode !== "both") return;
-                            const s = parseInt(
-                                document.getElementById("inst222Start")?.value,
-                            );
-                            const e = parseInt(
-                                document.getElementById("inst222End")?.value,
-                            );
-                            const s3 = parseInt(
-                                document.getElementById("inst323Start")?.value,
-                            );
-                            const e3 = parseInt(
-                                document.getElementById("inst323End")?.value,
-                            );
-                            if (
-                                [s, e, s3, e3].some((v) => isNaN(v))
-                            )
-                                return;
-                            if (e >= s3) {
-                                const fixed = _clampPaoRanges(
-                                    s,
-                                    e,
-                                    s3,
-                                    e3,
-                                    "e222",
-                                );
-                                if (
-                                    fixed.range323Start !== s3 ||
-                                    fixed.range222End !== e
-                                ) {
-                                    document.getElementById(
-                                        "inst323Start",
-                                    ).value = fixed.range323Start;
-                                    const note = document.getElementById(
-                                        "instPaoRangeClampNote",
-                                    );
-                                    if (note) {
-                                        note.textContent = fixed.note;
-                                        note.style.display = "";
-                                    }
-                                }
-                            } else {
-                                const note = document.getElementById(
-                                    "instPaoRangeClampNote",
-                                );
-                                if (note) note.style.display = "none";
-                            }
-                        };
-                        [
-                            "inst222Start",
-                            "inst222End",
-                            "inst323Start",
-                            "inst323End",
-                        ].forEach((id) => {
-                            const el = document.getElementById(id);
-                            if (el) el.addEventListener("input", liveClamp);
-                        });
+                        // Live update the helper text when the user edits
+                        // the crossover input.
+                        const crossEl =
+                            document.getElementById("instRangeCrossover");
+                        if (crossEl) {
+                            crossEl.addEventListener("input", () => {
+                                const v = parseInt(crossEl.value);
+                                if (isNaN(v)) return;
+                                rangeCrossover = v;
+                                _applyPaoRangeMode();
+                            });
+                        }
                         update();
                     }, 0);
                 }
@@ -7002,57 +6882,16 @@
                     );
                     if (sel) paoRangeMode = sel.value;
                     if (paoRangeMode === "both") {
-                        const s = document.getElementById("inst222Start");
-                        const e = document.getElementById("inst222End");
-                        const s3 = document.getElementById("inst323Start");
-                        const e3 = document.getElementById("inst323End");
-                        if (s) range222Start = parseInt(s.value) || 1;
-                        if (e) range222End = parseInt(e.value) || 3000;
-                        if (s3) range323Start = parseInt(s3.value) || 3001;
-                        if (e3) range323End = parseInt(e3.value) || 9999;
-                        // Auto-clamp to keep the two ranges non-overlapping
-                        if (range222End >= range323Start) {
-                            const fixed = _clampPaoRanges(
-                                range222Start,
-                                range222End,
-                                range323Start,
-                                range323End,
-                                "e222",
-                            );
-                            range222Start = fixed.range222Start;
-                            range222End = fixed.range222End;
-                            range323Start = fixed.range323Start;
-                            range323End = fixed.range323End;
-                            const note = document.getElementById(
-                                "instPaoRangeClampNote",
-                            );
-                            if (note) {
-                                note.textContent = fixed.note;
-                                note.style.display = "";
-                            }
-                        } else {
-                            const note = document.getElementById(
-                                "instPaoRangeClampNote",
-                            );
-                            if (note) note.style.display = "none";
-                        }
-                    } else {
-                        // Locked to 1..PI_DIGITS.length for the chosen mode
-                        range222Start = 1;
-                        range222End = PI_DIGITS.length;
-                        range323Start = 1;
-                        range323End = PI_DIGITS.length;
+                        const crossEl =
+                            document.getElementById("instRangeCrossover");
+                        if (crossEl)
+                            rangeCrossover =
+                                parseInt(crossEl.value) || rangeCrossover;
                     }
                     _applyPaoRangeMode();
-                    // Mirror into the settings inputs
-                    const sS = document.getElementById("range222Start");
-                    const sE = document.getElementById("range222End");
-                    const sS3 = document.getElementById("range323Start");
-                    const sE3 = document.getElementById("range323End");
-                    if (sS) sS.value = range222Start;
-                    if (sE) sE.value = range222End;
-                    if (sS3) sS3.value = range323Start;
-                    if (sE3) sE3.value = range323End;
+                    // Mirror the crossover into the settings input
+                    const sCross = document.getElementById("rangeCrossover");
+                    if (sCross) sCross.value = rangeCrossover;
                     saveSettings();
                 }
 

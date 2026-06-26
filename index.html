@@ -462,64 +462,28 @@
                                 margin: 4px 0 8px 0;
                             "
                         ></div>
-                        <div id="paoRange222Row" class="setting-row">
-                            <label style="min-width: 90px">2-2-2 from:</label>
+                        <div id="paoRangeBothRow" class="setting-row">
+                            <label style="min-width: 180px"
+                                >2-2-2 / 3-2-3 crossover at:</label
+                            >
                             <input
                                 type="number"
-                                id="range222Start"
+                                id="rangeCrossover"
                                 class="short-input"
                                 min="1"
-                                value="1"
-                                inputmode="numeric"
-                            />
-                            <label style="margin: 0 4px">to:</label>
-                            <input
-                                type="number"
-                                id="range222End"
-                                class="short-input"
-                                min="1"
-                                value="3000"
-                                inputmode="numeric"
-                            />
-                        </div>
-                        <div id="paoRange323Row" class="setting-row">
-                            <label style="min-width: 90px">3-2-3 from:</label>
-                            <input
-                                type="number"
-                                id="range323Start"
-                                class="short-input"
-                                min="1"
-                                value="3001"
-                                inputmode="numeric"
-                            />
-                            <label style="margin: 0 4px">to:</label>
-                            <input
-                                type="number"
-                                id="range323End"
-                                class="short-input"
-                                min="1"
-                                value="9999"
+                                value="1000"
                                 inputmode="numeric"
                             />
                             <span
                                 style="
                                     color: #888;
-                                    font-size: 0.75rem;
-                                    margin-left: 2px;
+                                    font-size: 0.78rem;
                                 "
-                                title="Capped at the total pi digits in this app"
-                                >(max: 10000)</span
+                                title="2-2-2 covers 1..crossover, 3-2-3 covers crossover+1..end"
                             >
+                                (2-2-2 ends here; 3-2-3 starts at the next)
+                            </span>
                         </div>
-                        <div
-                            id="paoRangeClampNote"
-                            style="
-                                display: none;
-                                font-size: 0.78rem;
-                                color: #b45309;
-                                margin: 8px 0 0 0;
-                            "
-                        ></div>
                     </fieldset>
 
                     <fieldset>
@@ -672,21 +636,13 @@
                         <div id="paoTextareaSection" class="pao-source-section">
                             <label>Person (Num - Name):</label
                             ><textarea id="personList"></textarea>
-                            <div
-                                id="personListStatus"
-                                class="inst-validation"
-                            ></div>
                             <label>Action (Num - Action):</label
                             ><textarea id="actionList"></textarea>
-                            <div
-                                id="actionListStatus"
-                                class="inst-validation"
-                            ></div>
                             <label>Object (Num - Object):</label
                             ><textarea id="objectList"></textarea>
                             <div
-                                id="objectListStatus"
-                                class="inst-validation"
+                                id="paoTextareaValidationSummary"
+                                class="inst-validation-summary"
                             ></div>
                         </div>
                         <div id="paoExcelSection" class="pao-source-section">
@@ -1963,28 +1919,8 @@
                     </div>
 
                     <!-- Heatmap & pi coverage colour scheme -->
-                    <div
-                        class="stats-color-scheme-section"
-                        style="
-                            margin-top: 16px;
-                            padding-top: 16px;
-                            border-top: 1px solid var(--stats-border);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                        "
-                    >
-                        <label
-                            for="heatmapSchemeSelect"
-                            style="
-                                font-size: 0.78rem;
-                                color: var(--stats-text-muted);
-                                flex: 0 0 auto;
-                            "
-                        >
-                            Colour scheme:
-                        </label>
+                    <div class="stats-color-scheme-editor">
+                        <label for="heatmapSchemeSelect">Colour scheme:</label>
                         <select
                             id="heatmapSchemeSelect"
                             class="stats-color-scheme-select"

@@ -1174,6 +1174,25 @@ input[type="text"]#piInput:focus {
     color: var(--stats-text-faint);
     flex: 0 0 auto;
 }
+
+/* Colour-scheme section: same look as the daily-goal row above so the
+   two settings line up visually. */
+.stats-color-scheme-editor {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--stats-border);
+}
+.stats-color-scheme-editor label {
+    font-size: 0.85rem;
+    color: var(--stats-text-muted);
+    flex: 0 0 auto;
+}
+.stats-color-scheme-editor select {
+    flex: 0 0 auto;
+}
 .excel-columns-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1847,6 +1866,20 @@ input[type="text"]#piInput:focus {
     display: none;
 }
 .dark-mode .inst-validation {
+    color: #fca5a5;
+}
+
+/* Consolidated validation summary — shown BELOW all three textareas
+   (in both the Settings page and the installer). Lists each
+   textarea that has a problem and what's wrong. */
+.inst-validation-summary {
+    font-size: 0.8rem;
+    color: #f87171;
+    margin: 8px 0 0 0;
+    line-height: 1.45;
+    display: none;
+}
+.dark-mode .inst-validation-summary {
     color: #fca5a5;
 }
 
