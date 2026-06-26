@@ -1156,7 +1156,7 @@ input[type="text"]#piInput:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 28px;
+    gap: 40px;
     flex-wrap: wrap;
     padding-top: 16px;
     border-top: 1px solid var(--stats-border);
@@ -1900,14 +1900,14 @@ input[type="text"]#piInput:focus {
 /* Stats modal: colour-scheme <select> alignment. Fixed height + line-height
    matches the label baseline so the dropdown isn't vertically offset. */
 .stats-color-scheme-select {
-    font-size: 0.78rem;
-    padding: 2px 6px;
+    font-size: 0.85rem;
+    padding: 6px 6px;
     background: var(--stats-input-bg);
     color: var(--stats-text);
     border: 1px solid var(--stats-border);
-    border-radius: 4px;
-    height: 24px;
-    line-height: 1;
+    border-radius: 5px;
     box-sizing: border-box;
     flex: 0 0 auto;
+    min-width: 90px;
+    max-width: 160px;
 }

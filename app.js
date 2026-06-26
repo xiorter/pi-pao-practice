@@ -234,8 +234,14 @@
                         String(i).padStart(3, "0"),
                     );
 
-                    const validate = (map, required) => {
-                        const present = allKeys(map);
+                    const validate = (map, required, keyLen) => {
+                        // Only consider keys of the matching length —
+                        // the map can hold BOTH 2-digit and 3-digit keys
+                        // (for 2-2-2 and 3-2-3 modes respectively) and we
+                        // must not flag the wrong-length keys as "extra".
+                        const present = allKeys(map).filter(
+                            (k) => k.length === keyLen,
+                        );
                         const presentSet = new Set(present);
                         const missing = required.filter(
                             (k) => !presentSet.has(k),
@@ -258,15 +264,17 @@
                     };
                     // If a set isn't present in the map, return null so
                     // _updatePaoValidationSummary knows to skip it.
-                    const ok = (cond, map, req) =>
-                        cond ? validate(map, req) : null;
+                    const ok = (cond, map, req, keyLen) =>
+                        cond ? validate(map, req, keyLen) : null;
 
                     return {
-                        person2: ok(pHas2, p, req2),
-                        person3: ok(pHas3, p, req3),
-                        action: aHas2 ? validate(a, req2) : { ok: true },
-                        object2: ok(oHas2, o, req2),
-                        object3: ok(oHas3, o, req3),
+                        person2: ok(pHas2, p, req2, 2),
+                        person3: ok(pHas3, p, req3, 3),
+                        action: aHas2
+                            ? validate(a, req2, 2)
+                            : { ok: true },
+                        object2: ok(oHas2, o, req2, 2),
+                        object3: ok(oHas3, o, req3, 3),
                         has2: pHas2 || oHas2 || aHas2,
                         has3: pHas3 || oHas3,
                     };
