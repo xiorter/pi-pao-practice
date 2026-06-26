@@ -1809,3 +1809,12 @@ input[type="text"]#piInput:focus {
         font-size: 0.75rem;
     }
 }
+
+/* --- Installer modal: per-step title --- */
+.installer-step-title {
+    border-bottom: 1px solid var(--modal-border-subtle);
+    padding-bottom: 6px;
+}
+.dark-mode .installer-step-title {
+    border-bottom-color: var(--modal-border-subtle);
+}

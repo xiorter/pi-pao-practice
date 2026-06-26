@@ -98,8 +98,12 @@
                 // Heatmap/picoverage colour schemes (light → dark).
                 // Empty-cell color is mode-aware (#EAEAEA light / #222222 dark) and set in CSS.
                 const HEATMAP_SCHEMES = {
-                    ice: { light: "#95C8F3", dark: "#0063DE" },
-                    magenta: { light: "#ffb8d9", dark: "#5c2657" },
+                    ice: { light: "#95C8F3", dark: "#0063DE", overdue: "#003280" },
+                    magenta: {
+                        light: "#ffb8d9",
+                        dark: "#5c2657",
+                        overdue: "#3a0050",
+                    },
                 };
 
                 // Module-scope color interpolator used by both the heatmap and pi-coverage.
@@ -110,6 +114,36 @@
                     const rg = Math.round(ag + (bg - ag) * t);
                     const rb = Math.round(ab + (bb - ab) * t);
                     return `rgb(${rr},${rg},${rb})`;
+                }
+
+                // True when the app is running from disk or a local dev server
+                // (file://, localhost, 127.0.0.1, 192.168/10/172.x private ranges).
+                // On GitHub Pages this is false, which is how we hide the
+                // "Media folder path" setting — that path can never resolve on Pages.
+                function _isLocalDev() {
+                    const h = location.hostname;
+                    if (!h || h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0")
+                        return true;
+                    if (h.startsWith("192.168.") || h.startsWith("10.")) return true;
+                    if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(h)) return true;
+                    return false;
+                }
+
+                // Update the "Load media" label + folder-button visibility so
+                // it only promises what the current browser can deliver.
+                function _updateLoadMediaLabel() {
+                    const folderSupported = "showDirectoryPicker" in window;
+                    const label = document.getElementById("loadMediaLabel");
+                    if (label)
+                        label.textContent = folderSupported
+                            ? "Load media (pick a folder or upload a .zip):"
+                            : "Load media (upload a .zip):";
+                    // Also hide the folder button if the API is missing.
+                    const fb = document.getElementById("loadMediaFolderBtn");
+                    if (fb) fb.style.display = folderSupported ? "" : "none";
+                    // Show the "local dev only" note when on a hosted origin
+                    const note = document.getElementById("loadMediaLocalNote");
+                    if (note) note.style.display = _isLocalDev() ? "none" : "";
                 }
 
                 // ── Daily Goal / Stats ──
@@ -2565,11 +2599,11 @@
                             } else {
                                 // "due" mode
                                 if (daysUntilDue < 0) {
-                                    // Overdue: solid darker shade of dark purple
-                                    cell.style.background = "#3a0050";
+                                    // Overdue: scheme-aware solid color
+                                    cell.style.background = _scheme.overdue;
                                 } else {
-                                    // daysUntilDue >= 0: interpolate (0 = darkest, 90+ = lightest)
-                                    const t = Math.max(0, Math.min(1, 1 - daysUntilDue / 90));
+                                    // daysUntilDue >= 0: interpolate (0 = darkest, 30+ = lightest)
+                                    const t = Math.max(0, Math.min(1, 1 - daysUntilDue / 30));
                                     cell.style.background = pcLerpColor(pcLight, pcDark, t);
                                 }
                             }
@@ -5825,12 +5859,38 @@
                     // Restore media (folder handle → stored zip) without blocking init
                     restoreMedia();
 
-                    // Wire the help button to re-open the installer at any time.
+                    // Wire the help button to open the GitHub README in a new tab.
                     const helpBtn = document.getElementById("helpBtn");
                     if (helpBtn)
                         helpBtn.addEventListener("click", () =>
-                            openInstaller(0),
+                            window.open(
+                                "https://github.com/xiorter/pi-pao-practice/blob/main/README.md",
+                                "_blank",
+                                "noopener",
+                            ),
                         );
+
+                    // Wire the "Run setup wizard" button in Settings.
+                    const runInstallerBtn =
+                        document.getElementById("runInstallerBtn");
+                    if (runInstallerBtn)
+                        runInstallerBtn.addEventListener("click", () => {
+                            if (settingsModal)
+                                settingsModal.style.display = "none";
+                            openInstaller(0);
+                        });
+
+                    // Hide the Media folder path setting on non-local origins
+                    // (it's only useful when running this app from disk or a
+                    // local dev server).
+                    const ankiPathInput =
+                        document.getElementById("ankiMediaPathInput");
+                    if (ankiPathInput && !_isLocalDev()) {
+                        const wrap = ankiPathInput.closest(".setting-row");
+                        if (wrap) wrap.style.display = "none";
+                    }
+                    // Update the "Load media" label to reflect folder-picker support
+                    _updateLoadMediaLabel();
 
                     // First-run installer
                     if (localStorage.getItem("piPaoOnboarded") !== "1") {
@@ -5863,11 +5923,14 @@
                     modal.style.display = "flex";
                     renderInstallerStep();
                 }
-                function closeInstaller(markDone) {
+                function closeInstaller() {
                     const modal = document.getElementById("welcomeModal");
                     if (!modal) return;
                     modal.style.display = "none";
-                    if (markDone) localStorage.setItem("piPaoOnboarded", "1");
+                    // One-shot: any close (Done / Skip / ✕) marks the installer
+                    // as done so it doesn't auto-open on subsequent visits.
+                    // The user can re-open it via Settings → Run setup wizard.
+                    localStorage.setItem("piPaoOnboarded", "1");
                 }
 
                 function renderInstallerStep() {
@@ -5880,6 +5943,8 @@
                     const back = document.getElementById("installerBackBtn");
                     const next = document.getElementById("installerNextBtn");
                     const skip = document.getElementById("installerSkipBtn");
+                    const titleEl =
+                        document.getElementById("installerStepTitle");
                     if (!body || !label || !progress) return;
 
                     const step = _INSTALLER_STEPS[_installerStep];
@@ -5887,6 +5952,8 @@
                     const pct = ((_installerStep + 1) / total) * 100;
                     progress.style.width = pct + "%";
                     label.textContent = `Step ${_installerStep + 1} of ${total}`;
+                    if (titleEl)
+                        titleEl.textContent = _INSTALLER_TITLES[step] || "";
 
                     // Back hidden on first step
                     back.style.visibility =
@@ -5915,17 +5982,22 @@
                         renderInstallerAnkiImages(body);
                     else if (step === "cloudSync")
                         renderInstallerCloudSync(body);
-
-                    // Re-apply accent so the title uses the right color
-                    const title = body.parentElement.querySelector("h2");
-                    if (title) title.style.color = "var(--accent, #3584E4)";
                 }
 
-                // Tiny helper to build a labelled row
+                // Per-slide titles shown above each step's body.
+                const _INSTALLER_TITLES = {
+                    appearance: "Appearance",
+                    paoSource: "PAO Source",
+                    paoRanges: "PAO Range",
+                    ankiImages: "Anki Images",
+                    cloudSync: "Cloud Sync",
+                };
+
+                // Tiny helper: build a labelled row (label on the left, controls on the right).
                 function _installerRow(label, controlHtml, hint) {
                     const row = document.createElement("div");
-                    row.style.cssText =
-                        "display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0;";
+                    row.className = "setting-row";
+                    row.style.cssText = "margin:6px 0;";
                     if (label) {
                         const lab = document.createElement("label");
                         lab.style.cssText =
@@ -5954,51 +6026,19 @@
                     p.textContent = text;
                     return p;
                 }
-
-                // Step 1: Appearance
-                function renderInstallerAppearance(body) {
-                    body.appendChild(
-                        _installerP(
-                            "Choose the look and feel. You can change all of this later in Settings → Appearance.",
-                        ),
-                    );
-                    body.appendChild(
-                        _installerRow(
-                            "Theme",
-                            `<label style="cursor:pointer"><input type="checkbox" id="instDarkMode" ${
-                                document.body.classList.contains("dark-mode")
-                                    ? "checked"
-                                    : ""
-                            }> Dark mode</label>`,
-                        ),
-                    );
-                    body.appendChild(
-                        _installerRow(
-                            "Correct",
-                            `<input type="color" id="instCorrect" value="${correctColor}">`,
-                        ),
-                    );
-                    body.appendChild(
-                        _installerRow(
-                            "Incorrect",
-                            `<input type="color" id="instIncorrect" value="${incorrectColor}">`,
-                        ),
-                    );
-                    body.appendChild(
-                        _installerRow(
-                            "Accent",
-                            `<input type="color" id="instAccent" value="${accentColor}">
-                             <small style="color:var(--modal-text-muted)">Used for buttons, progress bars, and stat highlights.</small>`,
-                        ),
-                    );
-                    body.appendChild(
-                        _installerRow(
-                            "Background",
-                            `<input type="color" id="instBg" value="${currentBackgroundColor}">`,
-                        ),
-                    );
+                // Variant of _installerP that takes an innerHTML string (for links).
+                function _installerPHtml(html) {
+                    const p = document.createElement("p");
+                    p.style.cssText =
+                        "text-align:left;font-size:0.9rem;color:var(--modal-text-muted);margin:4px 0 10px;";
+                    p.innerHTML = html;
+                    return p;
                 }
-                function _saveInstallerAppearance() {
+
+                // ── Live preview helper for the Appearance step ──
+                // Called on every change in the step 1 inputs so the user
+                // sees their changes instantly without clicking Next.
+                function _installerAppearanceLive() {
                     const dark = document.getElementById("instDarkMode");
                     const c = document.getElementById("instCorrect");
                     const ic = document.getElementById("instIncorrect");
@@ -6017,6 +6057,65 @@
                             currentBackgroundColor;
                     }
                     applyAccentColor();
+                    // Also re-render the heatmap & pi-coverage so the scheme
+                    // pickers + accent apply immediately.
+                    if (typeof renderHeatmap === "function") renderHeatmap();
+                    if (typeof renderPiCoverage === "function")
+                        renderPiCoverage();
+                }
+
+                // Step 1: Appearance — mirrors Settings → Appearance.
+                function renderInstallerAppearance(body) {
+                    const dark = document.createElement("div");
+                    dark.className = "setting-row";
+                    dark.innerHTML = `<label style="cursor:pointer"><input type="checkbox" id="instDarkMode" ${
+                        document.body.classList.contains("dark-mode")
+                            ? "checked"
+                            : ""
+                    }> Dark mode (menus)</label>`;
+                    body.appendChild(dark);
+                    body.appendChild(
+                        _installerRow(
+                            "Correct:",
+                            `<input type="color" id="instCorrect" value="${correctColor}">`,
+                        ),
+                    );
+                    body.appendChild(
+                        _installerRow(
+                            "Incorrect:",
+                            `<input type="color" id="instIncorrect" value="${incorrectColor}">`,
+                        ),
+                    );
+                    body.appendChild(
+                        _installerRow(
+                            "Accent:",
+                            `<input type="color" id="instAccent" value="${accentColor}">`,
+                        ),
+                    );
+                    body.appendChild(
+                        _installerRow(
+                            "Background:",
+                            `<input type="color" id="instBg" value="${currentBackgroundColor}">`,
+                        ),
+                    );
+                    // Live-preview wiring: every change updates the live app.
+                    setTimeout(() => {
+                        const wire = (id, ev) => {
+                            const el = document.getElementById(id);
+                            if (el)
+                                el.addEventListener(ev, () =>
+                                    _installerAppearanceLive(),
+                                );
+                        };
+                        wire("instDarkMode", "change");
+                        wire("instCorrect", "input");
+                        wire("instIncorrect", "input");
+                        wire("instAccent", "input");
+                        wire("instBg", "input");
+                    }, 0);
+                }
+                function _saveInstallerAppearance() {
+                    _installerAppearanceLive();
                     // Mirror into the main settings inputs
                     const sCorrect =
                         document.getElementById("correctColorPicker");
@@ -6033,20 +6132,17 @@
                     saveSettings();
                 }
 
-                // Step 2: PAO source
+                // Step 2: PAO source — mirrors Settings → PAO Source.
+                // Radio cards; selecting Textarea hides the Excel uploader
+                // and shows the three textareas (with live updates).
                 function renderInstallerPaoSource(body) {
-                    body.appendChild(
-                        _installerP(
-                            "How do you want to enter your Person-Action-Object terms?",
-                        ),
-                    );
                     const wrap = document.createElement("div");
                     wrap.style.cssText =
-                        "display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 12px;";
+                        "display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px;";
                     const mk = (val, label, hint) => {
                         const l = document.createElement("label");
                         l.style.cssText =
-                            "display:flex;align-items:flex-start;gap:6px;cursor:pointer;flex:1;min-width:200px;padding:10px;border:1px solid var(--modal-border);border-radius:6px;";
+                            "display:flex;align-items:flex-start;gap:6px;cursor:pointer;flex:1;min-width:180px;padding:10px;border:1px solid var(--modal-border);border-radius:6px;";
                         l.innerHTML = `<input type="radio" name="instPaoSource" value="${val}" ${
                             paoDataSource === val ? "checked" : ""
                         }>
@@ -6057,25 +6153,123 @@
                         mk(
                             "excel",
                             "Excel (recommended)",
-                            "Upload a .xlsx with the default column layout (E=number, F=3-digit person, G=2-digit action, H=3-digit object, L=2-digit person, M=2-digit object).",
+                            "Upload a .xlsx with the default column layout.",
                         ),
                     );
                     wrap.appendChild(
                         mk(
                             "textarea",
                             "Textarea",
-                            'Three textareas (Person, Action, Object). Accepts "00 - Zeus", "00\tZeus", "00:Zeus", "00,Zeus" — separated by newline or semicolon.',
+                            "Three textareas — one entry per line, e.g. 00 - Zeus.",
                         ),
                     );
                     body.appendChild(wrap);
 
-                    // Quick Excel uploader (for step 2 only) — the user can always re-upload in Settings.
-                    const upWrap = document.createElement("div");
-                    upWrap.style.cssText =
-                        "margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
-                    upWrap.innerHTML = `<label style="font-weight:bold">Upload Excel (optional):</label>
+                    // Excel uploader (shown only when Excel is selected)
+                    const excelSection = document.createElement("div");
+                    excelSection.id = "instExcelSection";
+                    excelSection.style.cssText =
+                        "display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
+                    excelSection.innerHTML = `<label style="font-weight:bold">Upload Excel:</label>
                         <input type="file" id="instExcelUpload" accept=".xlsx,.xls">`;
-                    body.appendChild(upWrap);
+                    body.appendChild(excelSection);
+
+                    // Textarea section (shown only when Textarea is selected)
+                    const taSection = document.createElement("div");
+                    taSection.id = "instTextareaSection";
+                    taSection.style.cssText = "display:none;";
+                    taSection.appendChild(
+                        _installerP(
+                            "Format: one entry per line as <code>Number - Term</code>. Lines starting with <code>#</code> are ignored.",
+                        ),
+                    );
+                    const tPerson = document.createElement("textarea");
+                    tPerson.id = "instPersonList";
+                    tPerson.placeholder = "Person (Num - Name)";
+                    tPerson.style.cssText =
+                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:6px;";
+                    tPerson.value = formatPaoList(personList);
+                    taSection.appendChild(tPerson);
+                    const tAction = document.createElement("textarea");
+                    tAction.id = "instActionList";
+                    tAction.placeholder = "Action (Num - Action)";
+                    tAction.style.cssText =
+                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:6px;";
+                    tAction.value = formatPaoList(actionList);
+                    taSection.appendChild(tAction);
+                    const tObject = document.createElement("textarea");
+                    tObject.id = "instObjectList";
+                    tObject.placeholder = "Object (Num - Object)";
+                    tObject.style.cssText =
+                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;";
+                    tObject.value = formatPaoList(objectList);
+                    taSection.appendChild(tObject);
+                    body.appendChild(taSection);
+
+                    // Initial visibility + onchange
+                    const update = () => {
+                        const sel = document.querySelector(
+                            'input[name="instPaoSource"]:checked',
+                        );
+                        const v = sel ? sel.value : paoDataSource;
+                        excelSection.style.display = v === "excel" ? "" : "none";
+                        taSection.style.display = v === "textarea" ? "" : "none";
+                    };
+                    setTimeout(() => {
+                        document
+                            .querySelectorAll('input[name="instPaoSource"]')
+                            .forEach((r) =>
+                                r.addEventListener("change", update),
+                            );
+                        // Live textareas: parse on each input and persist
+                        const onTaInput = (id, setter) => {
+                            const el = document.getElementById(id);
+                            if (el)
+                                el.addEventListener("input", () =>
+                                    setter(parsePaoList(el.value)),
+                                );
+                        };
+                        onTaInput("instPersonList", (m) => (personList = m));
+                        onTaInput("instActionList", (m) => (actionList = m));
+                        onTaInput("instObjectList", (m) => (objectList = m));
+                        // Reuse the existing Excel handler by re-pointing the file
+                        const ex = document.getElementById("instExcelUpload");
+                        if (ex) {
+                            ex.addEventListener("change", (e) => {
+                                const real = document.getElementById(
+                                    "excelFileUpload",
+                                );
+                                if (real) {
+                                    const dt = new DataTransfer();
+                                    if (e.target.files[0])
+                                        dt.items.add(e.target.files[0]);
+                                    real.files = dt.files;
+                                    real.dispatchEvent(new Event("change"));
+                                    // Also push the value back to the textarea view
+                                    // so the user sees what was parsed.
+                                    const tPerson =
+                                        document.getElementById("instPersonList");
+                                    const tAction =
+                                        document.getElementById("instActionList");
+                                    const tObject =
+                                        document.getElementById("instObjectList");
+                                    if (tPerson)
+                                        tPerson.value = formatPaoList(
+                                            excelPersonList,
+                                        );
+                                    if (tAction)
+                                        tAction.value = formatPaoList(
+                                            excelActionList,
+                                        );
+                                    if (tObject)
+                                        tObject.value = formatPaoList(
+                                            excelObjectList,
+                                        );
+                                }
+                            });
+                        }
+                        update();
+                    }, 0);
                 }
                 function _saveInstallerPaoSource() {
                     const sel = document.querySelector(
@@ -6088,33 +6282,41 @@
                         );
                         if (radio) radio.checked = true;
                     }
+                    // Mirror textareas into the settings textareas
+                    const tPerson = document.getElementById("instPersonList");
+                    const tAction = document.getElementById("instActionList");
+                    const tObject = document.getElementById("instObjectList");
+                    if (tPerson && personListTextarea)
+                        personListTextarea.value = tPerson.value;
+                    if (tAction && actionListTextarea)
+                        actionListTextarea.value = tAction.value;
+                    if (tObject && objectListTextarea)
+                        objectListTextarea.value = tObject.value;
                     saveSettings();
                 }
 
-                // Step 3: PAO ranges
+                // Step 3: PAO range — matches the Settings → PAO Ranges layout.
                 function renderInstallerPaoRanges(body) {
                     body.appendChild(
                         _installerP(
-                            "Set the digit ranges for 2-2-2 and 3-2-3 modes. The app auto-switches mode based on the current position.",
+                            "Mode auto-switches based on current digit position.",
                         ),
                     );
-                    body.appendChild(
-                        _installerRow(
-                            "2-2-2 from → to",
-                            `<input type="number" id="inst222Start" min="1" value="${range222Start}" inputmode="numeric" class="short-input">
-                             <span>→</span>
-                             <input type="number" id="inst222End" min="1" value="${range222End}" inputmode="numeric" class="short-input">`,
-                        ),
-                    );
-                    body.appendChild(
-                        _installerRow(
-                            "3-2-3 from → to",
-                            `<input type="number" id="inst323Start" min="1" value="${range323Start}" inputmode="numeric" class="short-input">
-                             <span>→</span>
-                             <input type="number" id="inst323End" min="1" value="${range323End}" inputmode="numeric" class="short-input">
-                             <small style="color:var(--modal-text-muted)">(max 10000; capped at the total pi digits in this app)</small>`,
-                        ),
-                    );
+                    const r222 = document.createElement("div");
+                    r222.className = "setting-row";
+                    r222.innerHTML = `<label style="min-width:90px">2-2-2 from:</label>
+                        <input type="number" id="inst222Start" min="1" value="${range222Start}" inputmode="numeric" class="short-input">
+                        <label style="margin:0 4px">to:</label>
+                        <input type="number" id="inst222End" min="1" value="${range222End}" inputmode="numeric" class="short-input">`;
+                    body.appendChild(r222);
+                    const r323 = document.createElement("div");
+                    r323.className = "setting-row";
+                    r323.innerHTML = `<label style="min-width:90px">3-2-3 from:</label>
+                        <input type="number" id="inst323Start" min="1" value="${range323Start}" inputmode="numeric" class="short-input">
+                        <label style="margin:0 4px">to:</label>
+                        <input type="number" id="inst323End" min="1" value="${range323End}" inputmode="numeric" class="short-input">
+                        <span style="color:var(--modal-text-muted);font-size:0.85rem;margin-left:2px" title="Capped at the total pi digits in this app">(max: 10000)</span>`;
+                    body.appendChild(r323);
                 }
                 function _saveInstallerPaoRanges() {
                     const s = document.getElementById("inst222Start");
@@ -6137,52 +6339,52 @@
                     saveSettings();
                 }
 
-                // Step 4: Anki images (skippable)
+                // Step 4: Anki images (skippable) — mirrors Settings → Anki Images.
                 function renderInstallerAnkiImages(body) {
                     body.appendChild(
-                        _installerP(
-                            "The .txt exports below link your PAO terms to image filenames — they don't contain the terms themselves (those come from your Excel/textarea). See the README for the full Anki workflow.",
+                        _installerPHtml(
+                            'The .txt exports below link your PAO terms to image filenames. To get the files, <a href="https://github.com/xiorter/pi-pao-practice/blob/main/docs/SETTING_UP_ANKI.md" target="_blank" rel="noopener" style="color:var(--accent)">read the Anki setup guide</a>.',
                         ),
                     );
+                    // .txt uploads
                     const upWrap = document.createElement("div");
+                    upWrap.className = "setting-row";
                     upWrap.style.cssText =
-                        "display:flex;flex-direction:column;gap:8px;margin:8px 0 12px;";
+                        "flex-direction:column;align-items:flex-start;gap:6px;";
                     upWrap.innerHTML = `
                         <label style="font-weight:bold">Millennium PAO — 3-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt1" accept=".txt">
                         <label style="font-weight:bold">Century PAO — 2-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt2" accept=".txt">`;
                     body.appendChild(upWrap);
-
                     // Media loaders
                     const media = document.createElement("div");
+                    media.className = "setting-row";
                     media.style.cssText =
-                        "display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 8px;align-items:center;";
+                        "flex-direction:column;align-items:flex-start;gap:8px;";
                     const folderSupported = "showDirectoryPicker" in window;
                     const folderBtn = folderSupported
                         ? `<button type="button" id="instMediaFolderBtn" class="settings-btn">Choose media folder</button>`
                         : "";
-                    media.innerHTML = `${folderBtn}
-                        <label for="instMediaZip" class="settings-btn" style="cursor:pointer;display:inline-block;">Upload media .zip</label>
-                        <input type="file" id="instMediaZip" accept=".zip" style="display:none">
-                        <div id="instMediaStatus" class="anki-status" style="flex-basis:100%;text-align:left;">No media loaded.</div>`;
+                    media.innerHTML = `<label id="instLoadMediaLabel" style="font-weight:bold">${
+                        folderSupported
+                            ? "Load media (pick a folder or upload a .zip):"
+                            : "Load media (upload a .zip):"
+                    }</label>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                            ${folderBtn}
+                            <label for="instMediaZip" class="settings-btn" style="cursor:pointer;display:inline-block;">Upload media .zip</label>
+                            <input type="file" id="instMediaZip" accept=".zip" style="display:none">
+                        </div>
+                        <div id="instMediaStatus" class="anki-status" style="text-align:left;">No folder selected.</div>`;
                     body.appendChild(media);
 
-                    const help = document.createElement("div");
-                    help.style.cssText =
-                        "margin-top:6px;font-size:0.85rem;color:var(--modal-text-muted);";
-                    help.innerHTML = `Don't have Anki set up like the author?
-                        <a href="https://github.com/xiorter/pi-pao-practice/blob/main/docs/SETTING_UP_ANKI.md" target="_blank" rel="noopener" style="color:var(--accent)">Read the Anki setup guide →</a>`;
-                    body.appendChild(help);
-
                     // Wire the inputs in this step — IMPORTANT: do NOT close the modal on action.
-                    // Reuse the existing handlers by re-pointing them at the installer inputs.
                     setTimeout(() => {
                         const t1 = document.getElementById("instAnkiTxt1");
                         const t2 = document.getElementById("instAnkiTxt2");
                         if (t1) {
                             t1.addEventListener("change", (e) => {
-                                // Reuse the existing ankiTxtUpload handler by re-pointing files
                                 const real = document.getElementById(
                                     "ankiTxtUpload",
                                 );
@@ -6253,17 +6455,17 @@
                     }, 0);
                 }
 
-                // Step 5: Cloud sync (optional)
+                // Step 5: Cloud sync (optional) — mirrors Settings → Cloud Sync.
                 function renderInstallerCloudSync(body) {
                     body.appendChild(
                         _installerP(
-                            "Sync your review progress and position across devices. Optional — skip if you don't want to set this up now.",
+                            "Sync your review progress and position across devices.",
                         ),
                     );
                     const link = document.createElement("p");
                     link.style.cssText =
                         "font-size:0.85rem;color:var(--modal-text-muted);margin:4px 0 8px;";
-                    link.innerHTML = `Requires a free <a href="https://console.firebase.google.com" target="_blank" rel="noopener" style="color:var(--accent)">Firebase project</a>. Paste your config JSON below.`;
+                    link.innerHTML = `Requires a free <a href="https://console.firebase.google.com" target="_blank" rel="noopener" style="color:var(--accent)">Firebase project</a>. Paste your config below.`;
                     body.appendChild(link);
                     const ta = document.createElement("textarea");
                     ta.id = "instFirebaseConfig";
@@ -6306,19 +6508,19 @@
                         // paoRanges/ankiImages save nothing extra here
 
                         if (_installerStep === _INSTALLER_STEPS.length - 1) {
-                            closeInstaller(true);
+                            closeInstaller();
                             return;
                         }
                         openInstaller(_installerStep + 1);
                     };
                     const skip = () => {
                         if (_installerStep === _INSTALLER_STEPS.length - 1) {
-                            closeInstaller(true);
+                            closeInstaller();
                         } else {
                             openInstaller(_installerStep + 1);
                         }
                     };
-                    const close = () => closeInstaller(false);
+                    const close = () => closeInstaller();
 
                     const bind = () => {
                         const $ = (id) => document.getElementById(id);

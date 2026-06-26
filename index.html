@@ -71,16 +71,16 @@
                 🔥 <span id="streakCountDisplay">0</span>
             </button>
             <div id="goalCenterText">0 / 400</div>
+            <button
+                type="button"
+                id="helpBtn"
+                class="top-btn help-btn"
+                title="Help (opens the README on GitHub)"
+                aria-label="Open the README on GitHub"
+            >
+                ?
+            </button>
             <div class="volume-widget">
-                <button
-                    type="button"
-                    id="helpBtn"
-                    class="top-btn help-btn"
-                    title="Help / Setup"
-                    aria-label="Help and setup"
-                >
-                    ?
-                </button>
                 <span class="vol-icon">🔊</span>
                 <input
                     type="range"
@@ -199,6 +199,27 @@
                 <span class="close" title="Close">×</span>
                 <form id="settingsForm" novalidate>
                     <h2>Settings</h2>
+                    <p
+                        style="
+                            margin: -4px 0 14px 0;
+                            font-size: 0.85rem;
+                            color: var(--modal-text-muted);
+                        "
+                    >
+                        Need to set things up from scratch?
+                        <button
+                            type="button"
+                            id="runInstallerBtn"
+                            class="settings-btn"
+                            style="
+                                padding: 4px 10px;
+                                font-size: 0.8rem;
+                                margin-left: 4px;
+                            "
+                        >
+                            Run setup wizard
+                        </button>
+                    </p>
 
                     <fieldset>
                         <legend>General</legend>
@@ -477,25 +498,6 @@
 
                     <fieldset>
                         <legend>Anki Images</legend>
-                        <p
-                            style="
-                                font-size: 0.8rem;
-                                color: #888;
-                                margin: 0 0 10px 0;
-                                line-height: 1.5;
-                            "
-                        >
-                            The <code>.txt</code> exports below link your PAO
-                            terms to image filenames. The terms themselves
-                            come from your PAO source (Excel or textarea,
-                            above). See
-                            <a
-                                href="https://xiorter.github.io/pi-pao-practice/"
-                                target="_blank"
-                                >the README</a
-                            >
-                            for the full workflow.
-                        </p>
                         <div
                             class="setting-row"
                             style="
@@ -568,9 +570,23 @@
                                 gap: 8px;
                             "
                         >
-                            <label style="font-weight: bold"
+                            <label
+                                id="loadMediaLabel"
+                                style="font-weight: bold"
                                 >Load media (pick a folder or upload a
                                 .zip):</label
+                            >
+                            <small
+                                id="loadMediaLocalNote"
+                                style="
+                                    display: none;
+                                    color: var(--modal-text-muted);
+                                    font-size: 0.78rem;
+                                    margin-top: -2px;
+                                "
+                                >Note: the Media folder path setting above is
+                                only used when running this app
+                                locally.</small
                             >
                             <div
                                 style="display: flex; gap: 8px; flex-wrap: wrap"
@@ -1808,6 +1824,7 @@
                                     display: flex;
                                     align-items: center;
                                     gap: 4px;
+                                    white-space: nowrap;
                                 "
                             >
                                 Colour scheme:
@@ -2520,19 +2537,30 @@
                          "
                      ></div>
                  </div>
-                 <div
-                     id="installerStepLabel"
-                     style="
-                         font-size: 0.75rem;
-                         color: var(--modal-text-muted);
-                         margin-bottom: 12px;
-                         text-transform: uppercase;
-                         letter-spacing: 1px;
-                     "
-                 >
-                     Step 1 of 5
-                 </div>
-                 <div id="installerBody"></div>
+                  <div
+                      id="installerStepLabel"
+                      style="
+                          font-size: 0.75rem;
+                          color: var(--modal-text-muted);
+                          margin-bottom: 4px;
+                          text-transform: uppercase;
+                          letter-spacing: 1px;
+                      "
+                  >
+                      Step 1 of 5
+                  </div>
+                  <h3
+                      id="installerStepTitle"
+                      class="installer-step-title"
+                      style="
+                          margin: 0 0 12px 0;
+                          font-size: 1.1rem;
+                          color: var(--modal-text-color);
+                      "
+                  >
+                      Appearance
+                  </h3>
+                  <div id="installerBody"></div>
                  <div
                      style="
                          display: flex;
