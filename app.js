@@ -135,9 +135,7 @@
                     const folderSupported = "showDirectoryPicker" in window;
                     const label = document.getElementById("loadMediaLabel");
                     if (label)
-                        label.textContent = folderSupported
-                            ? "Load media (pick a folder or upload a .zip):"
-                            : "Load media (upload a .zip):";
+                        label.textContent = "Load media:";
                     // Also hide the folder button if the API is missing.
                     const fb = document.getElementById("loadMediaFolderBtn");
                     if (fb) fb.style.display = folderSupported ? "" : "none";
@@ -5494,65 +5492,101 @@
                         return count;
                     }
 
-                    // ── IDB v2: add mediaZip store (for the zip-upload fallback) ──
-                    function openIDBv2() {
+                    // ── IDB v3: mediaBlobs store holds individual extracted images ──
+                    // Avoids re-extracting the full zip on every page load.
+                    // v2's mediaZip store is kept in the schema for upgrade
+                    // compat but is no longer written to.
+                    const IDB_ZIP_STORE = "mediaZip",
+                        IDB_ZIP_KEY = "zip",
+                        IDB_BLOBS_STORE = "mediaBlobs";
+
+                    function openIDBv3() {
                         return new Promise((res, rej) => {
-                            const req = indexedDB.open(IDB_NAME, 2);
+                            const req = indexedDB.open(IDB_NAME, 3);
                             req.onupgradeneeded = (e) => {
                                 const db = e.target.result;
-                                if (!db.objectStoreNames.contains(IDB_STORE)) {
+                                if (!db.objectStoreNames.contains(IDB_STORE))
                                     db.createObjectStore(IDB_STORE);
-                                }
-                                if (!db.objectStoreNames.contains(IDB_ZIP_STORE)) {
+                                if (!db.objectStoreNames.contains(IDB_ZIP_STORE))
                                     db.createObjectStore(IDB_ZIP_STORE);
-                                }
+                                if (!db.objectStoreNames.contains(IDB_BLOBS_STORE))
+                                    db.createObjectStore(IDB_BLOBS_STORE);
                             };
                             req.onsuccess = (e) => res(e.target.result);
                             req.onerror = (e) => rej(e.target.error);
                         });
                     }
-                    async function saveMediaZip(arrayBuffer, filename) {
-                        const db = await openIDBv2();
-                        return new Promise((res, rej) => {
-                            const tx = db.transaction(
-                                IDB_ZIP_STORE,
-                                "readwrite",
-                            );
-                            tx.objectStore(IDB_ZIP_STORE).put(
-                                { buf: arrayBuffer, filename },
-                                IDB_ZIP_KEY,
-                            );
-                            tx.oncomplete = res;
-                            tx.onerror = rej;
-                        });
-                    }
-                    async function loadMediaZip() {
-                        const db = await openIDBv2();
-                        return new Promise((res) => {
-                            const tx = db.transaction(IDB_ZIP_STORE, "readonly");
-                            const req = tx
-                                .objectStore(IDB_ZIP_STORE)
-                                .get(IDB_ZIP_KEY);
-                            req.onsuccess = (e) =>
-                                res(e.target.result || null);
-                            req.onerror = () => res(null);
-                        });
-                    }
-                    async function clearMediaZip() {
-                        const db = await openIDBv2();
-                        return new Promise((res) => {
-                            const tx = db.transaction(
-                                IDB_ZIP_STORE,
-                                "readwrite",
-                            );
-                            tx.objectStore(IDB_ZIP_STORE).delete(IDB_ZIP_KEY);
-                            tx.oncomplete = res;
-                            tx.onerror = () => res();
-                        });
+
+                    // Save extracted image Uint8Arrays to IDB.
+                    // rawMap: { filename: Uint8Array }
+                    // Also wipes the old zip entry to free space.
+                    async function saveExtractedBlobs(rawMap, sourceName) {
+                        try {
+                            const db = await openIDBv3();
+                            await new Promise((res, rej) => {
+                                const tx = db.transaction(
+                                    [IDB_BLOBS_STORE, IDB_ZIP_STORE],
+                                    "readwrite",
+                                );
+                                tx.objectStore(IDB_BLOBS_STORE).clear();
+                                tx.objectStore(IDB_ZIP_STORE).clear();
+                                tx.objectStore(IDB_BLOBS_STORE).put(
+                                    sourceName || "",
+                                    "_sourceName",
+                                );
+                                for (const [name, data] of Object.entries(rawMap)) {
+                                    tx.objectStore(IDB_BLOBS_STORE).put(
+                                        data,
+                                        "img:" + name,
+                                    );
+                                }
+                                tx.oncomplete = res;
+                                tx.onerror = rej;
+                            });
+                        } catch (e) {
+                            console.warn("Could not save blobs to IDB:", e);
+                        }
                     }
 
-                    const IDB_ZIP_STORE = "mediaZip",
-                        IDB_ZIP_KEY = "zip";
+                    // Load extracted blobs from IDB.
+                    // Returns { _sourceName, filename: Uint8Array, … } or {}
+                    async function loadExtractedBlobs() {
+                        try {
+                            const db = await openIDBv3();
+                            return new Promise((res) => {
+                                const tx = db.transaction(IDB_BLOBS_STORE, "readonly");
+                                const result = {};
+                                const req = tx.objectStore(IDB_BLOBS_STORE).openCursor();
+                                req.onsuccess = (e) => {
+                                    const cursor = e.target.result;
+                                    if (!cursor) { res(result); return; }
+                                    const key = cursor.key;
+                                    if (key === "_sourceName")
+                                        result._sourceName = cursor.value;
+                                    else if (String(key).startsWith("img:"))
+                                        result[key.slice(4)] = cursor.value;
+                                    cursor.continue();
+                                };
+                                req.onerror = () => res({});
+                            });
+                        } catch (e) {
+                            console.warn("Could not load blobs from IDB:", e);
+                            return {};
+                        }
+                    }
+
+                    // Clear blobs store (called when folder picker takes over).
+                    async function clearExtractedBlobs() {
+                        try {
+                            const db = await openIDBv3();
+                            await new Promise((res) => {
+                                const tx = db.transaction(IDB_BLOBS_STORE, "readwrite");
+                                tx.objectStore(IDB_BLOBS_STORE).clear();
+                                tx.oncomplete = res;
+                                tx.onerror = () => res();
+                            });
+                        } catch (e) {}
+                    }
 
                     function _setMediaStatus(text, loaded) {
                         const el =
@@ -5575,6 +5609,18 @@
                             );
                             return 0;
                         }
+
+                        // Build the set of filenames we actually need from
+                        // loaded txt data. If no txt has been loaded yet,
+                        // neededFiles stays empty and we accept everything.
+                        const neededFiles = new Set();
+                        for (const map of [ankiImages, ankiImages2]) {
+                            for (const entry of Object.values(map)) {
+                                if (entry.personSrc) neededFiles.add(entry.personSrc);
+                                if (entry.objectSrc) neededFiles.add(entry.objectSrc);
+                            }
+                        }
+
                         _setMediaStatus(`Extracting ${filename}…`);
                         // Revoke old object URLs
                         Object.values(mediaFileMap).forEach((u) => {
@@ -5583,21 +5629,41 @@
                             } catch (e) {}
                         });
                         mediaFileMap = {};
-                        let count = 0;
-                        try {
-                            const entries = fflate.unzipSync(
-                                new Uint8Array(arrayBuffer),
-                            );
-                            for (const name in entries) {
-                                const lower = name.toLowerCase();
-                                if (
-                                    !lower.match(
-                                        /\.(jpg|jpeg|png|gif|webp|svg)$/,
+
+                        return new Promise((resolve) => {
+                            // Use async unzip instead of unzipSync — avoids the
+                            // "no callback" crash on large ZIPs and doesn't block
+                            // the main thread.
+                            fflate.unzip(new Uint8Array(arrayBuffer), (err, entries) => {
+                                if (err) {
+                                    console.error("Zip extract failed:", err);
+                                    _setMediaStatus(
+                                        `✗ Failed to read ${filename}: ${err.message}`,
+                                    );
+                                    resolve(0);
+                                    return;
+                                }
+                                let count = 0;
+                                // rawMap holds the Uint8Arrays we'll persist to IDB
+                                // so restoreMedia can recreate object URLs without
+                                // re-extracting the zip.
+                                const rawMap = {};
+                                for (const name in entries) {
+                                    const lower = name.toLowerCase();
+                                    if (
+                                        !lower.match(
+                                            /\.(jpg|jpeg|png|gif|webp|svg)$/,
+                                        )
                                     )
-                                )
-                                    continue;
-                                const blob = new Blob([entries[name]], {
-                                    type:
+                                        continue;
+                                    // Use the basename (zip may contain folders)
+                                    const base =
+                                        name.split("/").pop().split("\\").pop();
+                                    // Skip files not referenced by the loaded
+                                    // txt data — ignores unrelated Anki media.
+                                    if (neededFiles.size > 0 && !neededFiles.has(base))
+                                        continue;
+                                    const mime =
                                         "image/" +
                                         (lower.endsWith("png")
                                             ? "png"
@@ -5607,42 +5673,33 @@
                                                 ? "webp"
                                                 : lower.endsWith("svg")
                                                   ? "svg+xml"
-                                                  : "jpeg"),
-                                });
-                                // Use the basename (zip may contain folders)
-                                const base =
-                                    name.split("/").pop().split("\\").pop();
-                                mediaFileMap[base] =
-                                    URL.createObjectURL(blob);
-                                count++;
-                            }
-                        } catch (e) {
-                            console.error("Zip extract failed:", e);
-                            _setMediaStatus(
-                                `✗ Failed to read ${filename}: ${e.message}`,
-                            );
-                            return 0;
-                        }
-                        mediaFolderName = filename;
-                        if (persist) {
-                            try {
-                                await saveMediaZip(arrayBuffer, filename);
-                            } catch (e) {
-                                console.warn(
-                                    "Could not persist zip to IDB:",
-                                    e,
+                                                  : "jpeg");
+                                    const blob = new Blob([entries[name]], { type: mime });
+                                    mediaFileMap[base] = URL.createObjectURL(blob);
+                                    if (persist) rawMap[base] = entries[name];
+                                    count++;
+                                }
+                                mediaFolderName = filename;
+                                if (persist) {
+                                    saveExtractedBlobs(rawMap, filename).catch((e) =>
+                                        console.warn(
+                                            "Could not persist blobs to IDB:",
+                                            e,
+                                        ),
+                                    );
+                                }
+                                saveSettings();
+                                _setMediaStatus(
+                                    `✓ ${filename} (${count} images)`,
+                                    true,
                                 );
-                            }
-                        }
-                        saveSettings();
-                        _setMediaStatus(
-                            `✓ ${filename} (${count} images)`,
-                            true,
-                        );
-                        return count;
+                                resolve(count);
+                            });
+                        });
                     }
 
                     // Wire the "Choose media folder" button + zip input
+                    // + direct multi-file picker
                     (function wireMediaLoaders() {
                         const folderBtn =
                             document.getElementById("loadMediaFolderBtn");
@@ -5659,8 +5716,8 @@
                                     const handle =
                                         await window.showDirectoryPicker();
                                     await loadMediaFromHandle(handle);
-                                    // Clear any stored zip — folder picker takes precedence
-                                    await clearMediaZip();
+                                    // Clear stored blobs — folder picker takes precedence
+                                    await clearExtractedBlobs();
                                 } catch (e) {
                                     if (e.name !== "AbortError")
                                         alert(
@@ -5674,15 +5731,123 @@
                         zipInput.onchange = async (e) => {
                             const f = e.target.files[0];
                             if (!f) return;
+                            zipInput.disabled = true;
+                            _setMediaStatus(
+                                `Reading ${f.name} (${Math.round(f.size / 1024 / 1024)} MB)…`,
+                            );
                             const buf = await f.arrayBuffer();
                             await loadMediaFromZip(buf, f.name);
+                            zipInput.disabled = false;
                             e.target.value = "";
                         };
+
+                        // ── Direct file picker (works on all browsers, no zip needed) ──
+                        // Dynamically inject a "Select files…" button + hidden input next
+                        // to the zip upload so Firefox/Safari/mobile users can pick only
+                        // the images they need without zipping anything.
+                        const zipLabel = zipInput.closest("label") || zipInput.parentElement;
+                        if (zipLabel) {
+                            const filesInput = document.createElement("input");
+                            filesInput.type = "file";
+                            filesInput.multiple = true;
+                            filesInput.accept = "image/*";
+                            filesInput.style.display = "none";
+                            filesInput.id = "mediaFilesUpload";
+
+                            const filesBtn = document.createElement("button");
+                            filesBtn.type = "button";
+                            filesBtn.textContent = "Select image files…";
+                            filesBtn.className = "settings-btn";
+                            filesBtn.title =
+                                "Pick individual image files from your collection.media folder. " +
+                                "Load your Anki .txt export first so only the files you need are shown.";
+
+                            filesBtn.onclick = () => {
+                                // Collect needed filenames from loaded txt exports
+                                const needed = new Set();
+                                for (const map of [ankiImages, ankiImages2]) {
+                                    for (const entry of Object.values(map)) {
+                                        if (entry.personSrc) needed.add(entry.personSrc);
+                                        if (entry.objectSrc) needed.add(entry.objectSrc);
+                                    }
+                                }
+                                const hintEl = document.getElementById("mediaFilesHint");
+                                if (hintEl) {
+                                    hintEl.textContent =
+                                        needed.size > 0
+                                            ? `${needed.size} files needed — navigate to your collection.media folder and select them.`
+                                            : "Load your Anki .txt export first to see which files are needed.";
+                                }
+                                filesInput.click();
+                            };
+
+                            filesInput.onchange = async (ev) => {
+                                const files = Array.from(ev.target.files);
+                                if (!files.length) return;
+
+                                const neededFiles = new Set();
+                                for (const map of [ankiImages, ankiImages2]) {
+                                    for (const entry of Object.values(map)) {
+                                        if (entry.personSrc) neededFiles.add(entry.personSrc);
+                                        if (entry.objectSrc) neededFiles.add(entry.objectSrc);
+                                    }
+                                }
+
+                                _setMediaStatus(`Loading ${files.length} files…`);
+                                Object.values(mediaFileMap).forEach((u) => {
+                                    try { URL.revokeObjectURL(u); } catch (e) {}
+                                });
+                                mediaFileMap = {};
+
+                                let count = 0;
+                                const rawMap = {};
+                                for (const file of files) {
+                                    const lower = file.name.toLowerCase();
+                                    if (!lower.match(/\.(jpg|jpeg|png|gif|webp|svg)$/))
+                                        continue;
+                                    // Skip unrelated files if we know what we need
+                                    if (neededFiles.size > 0 && !neededFiles.has(file.name))
+                                        continue;
+                                    mediaFileMap[file.name] = URL.createObjectURL(file);
+                                    // Read as ArrayBuffer for IDB persistence
+                                    try {
+                                        rawMap[file.name] = new Uint8Array(
+                                            await file.arrayBuffer(),
+                                        );
+                                    } catch (e) {}
+                                    count++;
+                                }
+
+                                mediaFolderName = `${count} files`;
+                                saveSettings();
+                                saveExtractedBlobs(rawMap, `${count} files`).catch(
+                                    (e) => console.warn("Could not persist blobs:", e),
+                                );
+                                _setMediaStatus(`✓ ${count} images loaded`, true);
+                                ev.target.value = "";
+                            };
+
+                            // Hint text element
+                            const hintSpan = document.createElement("span");
+                            hintSpan.id = "mediaFilesHint";
+                            hintSpan.style.cssText =
+                                "display:block; font-size:0.82em; color:#888; margin-top:3px;";
+
+                            zipLabel.parentElement.insertBefore(
+                                filesInput,
+                                zipLabel.nextSibling,
+                            );
+                            zipLabel.appendChild(filesBtn);
+                            zipLabel.parentElement.insertBefore(
+                                hintSpan,
+                                filesInput.nextSibling,
+                            );
+                        }
                     })();
 
-                    // Restore media on load: try folder handle first, then stored zip
+                    // Restore media on load: try folder handle first, then stored blobs
                     async function restoreMedia() {
-                        // 1) Folder handle
+                        // 1) Folder handle (Chrome/Edge only)
                         try {
                             if ("showDirectoryPicker" in window) {
                                 const h = await loadDirHandle();
@@ -5704,16 +5869,44 @@
                         } catch (e) {
                             console.warn("Folder restore failed:", e);
                         }
-                        // 2) Stored zip
+                        // 2) Stored blobs — restores without re-extracting the zip
                         try {
-                            const stored = await loadMediaZip();
-                            if (stored && stored.buf) {
-                                await loadMediaFromZip(stored.buf, stored.filename, {
-                                    persist: false,
-                                });
+                            const stored = await loadExtractedBlobs();
+                            const keys = Object.keys(stored).filter(
+                                (k) => k !== "_sourceName",
+                            );
+                            if (keys.length === 0) return;
+                            Object.values(mediaFileMap).forEach((u) => {
+                                try { URL.revokeObjectURL(u); } catch (e) {}
+                            });
+                            mediaFileMap = {};
+                            for (const name of keys) {
+                                const data = stored[name];
+                                const lower = name.toLowerCase();
+                                const mime =
+                                    "image/" +
+                                    (lower.endsWith("png")
+                                        ? "png"
+                                        : lower.endsWith("gif")
+                                          ? "gif"
+                                          : lower.endsWith("webp")
+                                            ? "webp"
+                                            : lower.endsWith("svg")
+                                              ? "svg+xml"
+                                              : "jpeg");
+                                mediaFileMap[name] = URL.createObjectURL(
+                                    new Blob([data], { type: mime }),
+                                );
                             }
+                            mediaFolderName =
+                                stored._sourceName || `${keys.length} files`;
+                            saveSettings();
+                            _setMediaStatus(
+                                `✓ ${mediaFolderName} (${keys.length} images)`,
+                                true,
+                            );
                         } catch (e) {
-                            console.warn("Zip restore failed:", e);
+                            console.warn("Blob restore failed:", e);
                         }
                     }
 
@@ -7035,7 +7228,7 @@
                                     const handle =
                                         await window.showDirectoryPicker();
                                     await loadMediaFromHandle(handle);
-                                    await clearMediaZip();
+                                    await clearExtractedBlobs();
                                     const s = document.getElementById(
                                         "instMediaStatus",
                                     );

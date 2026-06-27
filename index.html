@@ -29,7 +29,11 @@
     <body>
         <!-- Hover Image Popup (shared, moved by JS) -->
         <div id="imgPopup" class="img-popup">
-            <div id="imgPopupHeader" class="img-popup-header" style="display:none"></div>
+            <div
+                id="imgPopupHeader"
+                class="img-popup-header"
+                style="display: none"
+            ></div>
             <div style="display: flex; gap: 4px; justify-content: center">
                 <img id="imgPopupImg" src="" alt="" />
                 <img id="imgPopupImg2" src="" alt="" style="display: none" />
@@ -258,51 +262,115 @@
                                     <div class="hotkey-group-title">Show</div>
                                     <div class="hotkey-row">
                                         <span>Word</span>
-                                        <input type="text" id="hintHotkey" maxlength="1" value="W" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="hintHotkey"
+                                            maxlength="1"
+                                            value="W"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>Number</span>
-                                        <input type="text" id="revealHotkey" maxlength="1" value="N" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="revealHotkey"
+                                            maxlength="1"
+                                            value="N"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>Image</span>
-                                        <input type="text" id="imgHotkey" maxlength="1" value="I" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="imgHotkey"
+                                            maxlength="1"
+                                            value="I"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                 </div>
                                 <!-- Navigate to modals -->
                                 <div class="hotkey-group">
-                                    <div class="hotkey-group-title">Navigate</div>
+                                    <div class="hotkey-group-title">
+                                        Navigate
+                                    </div>
                                     <div class="hotkey-row">
                                         <span>Browse</span>
-                                        <input type="text" id="browseHotkey" maxlength="1" value="B" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="browseHotkey"
+                                            maxlength="1"
+                                            value="B"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>Review</span>
-                                        <input type="text" id="reviewHotkey" maxlength="1" value="R" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="reviewHotkey"
+                                            maxlength="1"
+                                            value="R"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>Stats</span>
-                                        <input type="text" id="statsHotkey" maxlength="1" value="S" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="statsHotkey"
+                                            maxlength="1"
+                                            value="S"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>List</span>
-                                        <input type="text" id="listHotkey" maxlength="1" value="L" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="listHotkey"
+                                            maxlength="1"
+                                            value="L"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>Everest</span>
-                                        <input type="text" id="everestHotkey" maxlength="1" value="E" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="everestHotkey"
+                                            maxlength="1"
+                                            value="E"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                 </div>
                                 <!-- Modes and actions -->
                                 <div class="hotkey-group">
-                                    <div class="hotkey-group-title">Actions</div>
+                                    <div class="hotkey-group-title">
+                                        Actions
+                                    </div>
                                     <div class="hotkey-row">
                                         <span>Again</span>
-                                        <input type="text" id="mistakeHotkey" maxlength="1" value="A" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="mistakeHotkey"
+                                            maxlength="1"
+                                            value="A"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                     <div class="hotkey-row">
                                         <span>Hard</span>
-                                        <input type="text" id="hardHotkey" maxlength="1" value="H" class="hotkey-input" />
+                                        <input
+                                            type="text"
+                                            id="hardHotkey"
+                                            maxlength="1"
+                                            value="H"
+                                            class="hotkey-input"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -426,7 +494,10 @@
                         </p>
                         <div
                             class="setting-row"
-                            style="justify-content: space-around; margin-bottom: 10px"
+                            style="
+                                justify-content: space-around;
+                                margin-bottom: 10px;
+                            "
                         >
                             <label
                                 ><input
@@ -475,10 +546,7 @@
                                 inputmode="numeric"
                             />
                             <span
-                                style="
-                                    color: #888;
-                                    font-size: 0.78rem;
-                                "
+                                style="color: #888; font-size: 0.78rem"
                                 title="2-2-2 covers 1..crossover, 3-2-3 covers crossover+1..end"
                             >
                                 (2-2-2 ends here; 3-2-3 starts at the next)
@@ -560,11 +628,8 @@
                                 gap: 8px;
                             "
                         >
-                            <label
-                                id="loadMediaLabel"
-                                style="font-weight: bold"
-                                >Load media (pick a folder or upload a
-                                .zip):</label
+                            <label id="loadMediaLabel" style="font-weight: bold"
+                                >Load media:</label
                             >
                             <div
                                 style="display: flex; gap: 8px; flex-wrap: wrap"
@@ -593,7 +658,7 @@
                                 />
                             </div>
                             <div id="mediaFolderStatus" class="anki-status">
-                                No folder selected.
+                                No media selected.
                             </div>
                         </div>
                     </fieldset>
@@ -1804,19 +1869,75 @@
                         </div>
                         <div class="stats-heatmap-nav-row">
                             <div class="stats-heatmap-year-nav">
-                                <button class="stats-heatmap-nav-btn" id="heatmapPrevYear">←</button>
-                                <span id="heatmapYear" class="stats-heatmap-year"></span>
-                                <button class="stats-heatmap-nav-btn" id="heatmapNextYear">→</button>
+                                <button
+                                    class="stats-heatmap-nav-btn"
+                                    id="heatmapPrevYear"
+                                >
+                                    ←
+                                </button>
+                                <span
+                                    id="heatmapYear"
+                                    class="stats-heatmap-year"
+                                ></span>
+                                <button
+                                    class="stats-heatmap-nav-btn"
+                                    id="heatmapNextYear"
+                                >
+                                    →
+                                </button>
                             </div>
                             <div class="stats-heatmap-mode-selector">
-                                <label style="font-size: 0.7rem; color: var(--stats-text-muted); cursor: pointer; display: flex; align-items: center; gap: 3px;">
-                                    <input type="radio" name="heatmapMode" value="digits" /> Digits
+                                <label
+                                    style="
+                                        font-size: 0.7rem;
+                                        color: var(--stats-text-muted);
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 3px;
+                                    "
+                                >
+                                    <input
+                                        type="radio"
+                                        name="heatmapMode"
+                                        value="digits"
+                                    />
+                                    Digits
                                 </label>
-                                <label style="font-size: 0.7rem; color: var(--stats-text-muted); cursor: pointer; display: flex; align-items: center; gap: 3px;">
-                                    <input type="radio" name="heatmapMode" value="cards" /> Cards
+                                <label
+                                    style="
+                                        font-size: 0.7rem;
+                                        color: var(--stats-text-muted);
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 3px;
+                                    "
+                                >
+                                    <input
+                                        type="radio"
+                                        name="heatmapMode"
+                                        value="cards"
+                                    />
+                                    Cards
                                 </label>
-                                <label style="font-size: 0.7rem; color: var(--stats-text-muted); cursor: pointer; display: flex; align-items: center; gap: 3px;">
-                                    <input type="radio" name="heatmapMode" value="both" checked /> Both
+                                <label
+                                    style="
+                                        font-size: 0.7rem;
+                                        color: var(--stats-text-muted);
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 3px;
+                                    "
+                                >
+                                    <input
+                                        type="radio"
+                                        name="heatmapMode"
+                                        value="both"
+                                        checked
+                                    />
+                                    Both
                                 </label>
                             </div>
                         </div>
@@ -1862,13 +1983,42 @@
 
                     <!-- Pi coverage visualization -->
                     <div class="stats-heatmap-section">
-                        <div class="stats-heatmap-title"> Pi coverage</div>
+                        <div class="stats-heatmap-title">Pi coverage</div>
                         <div class="pi-cov-mode-selector">
-                            <label style="font-size: 0.7rem; color: var(--stats-text-muted); cursor: pointer; display: flex; align-items: center; gap: 3px;">
-                                <input type="radio" name="piCoverageMode" value="due" checked /> Due
+                            <label
+                                style="
+                                    font-size: 0.7rem;
+                                    color: var(--stats-text-muted);
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 3px;
+                                "
+                            >
+                                <input
+                                    type="radio"
+                                    name="piCoverageMode"
+                                    value="due"
+                                    checked
+                                />
+                                Due
                             </label>
-                            <label style="font-size: 0.7rem; color: var(--stats-text-muted); cursor: pointer; display: flex; align-items: center; gap: 3px;">
-                                <input type="radio" name="piCoverageMode" value="ease" /> Ease
+                            <label
+                                style="
+                                    font-size: 0.7rem;
+                                    color: var(--stats-text-muted);
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 3px;
+                                "
+                            >
+                                <input
+                                    type="radio"
+                                    name="piCoverageMode"
+                                    value="ease"
+                                />
+                                Ease
                             </label>
                         </div>
                         <div
@@ -1881,15 +2031,21 @@
                     <div class="stats-row" id="piCoverageStats">
                         <div class="stats-row-item">
                             <span class="stats-row-label">Overdue:</span>
-                            <span class="stats-row-value" id="piStatOverdue">0</span>
+                            <span class="stats-row-value" id="piStatOverdue"
+                                >0</span
+                            >
                         </div>
                         <div class="stats-row-item">
                             <span class="stats-row-label">Not added:</span>
-                            <span class="stats-row-value" id="piStatNotAdded">0</span>
+                            <span class="stats-row-value" id="piStatNotAdded"
+                                >0</span
+                            >
                         </div>
                         <div class="stats-row-item">
                             <span class="stats-row-label">Total cells:</span>
-                            <span class="stats-row-value" id="piStatTotal">0</span>
+                            <span class="stats-row-value" id="piStatTotal"
+                                >0</span
+                            >
                         </div>
                     </div>
 
@@ -1907,7 +2063,9 @@
                             <span class="stats-goal-unit">digits</span>
                         </div>
                         <div class="stats-color-scheme-editor">
-                            <label for="heatmapSchemeSelect">Colour scheme:</label>
+                            <label for="heatmapSchemeSelect"
+                                >Colour scheme:</label
+                            >
                             <select
                                 id="heatmapSchemeSelect"
                                 class="stats-color-scheme-select"
@@ -2159,7 +2317,9 @@
                             "
                         >
                             IMAGE #<span id="everestBlockNum"></span>
-                            &nbsp;·&nbsp; POSITION #<span id="everestPiPos"></span>
+                            &nbsp;·&nbsp; POSITION #<span
+                                id="everestPiPos"
+                            ></span>
                         </div>
                         <div
                             id="everestDigits"
@@ -2451,7 +2611,7 @@
         </div>
 
         <!-- Pi coverage right-click context menu -->
-        <div id="piContextMenu" class="pi-context-menu" style="display:none">
+        <div id="piContextMenu" class="pi-context-menu" style="display: none">
             <div class="pi-context-header"></div>
             <div class="pi-context-info"></div>
             <div class="pi-context-row">
@@ -2462,139 +2622,141 @@
             </div>
             <div class="pi-context-buttons">
                 <button id="piContextToday" type="button">Due Today</button>
-                <button id="piContextRemove" type="button">Remove from Deck</button>
-             </div>
-         </div>
+                <button id="piContextRemove" type="button">
+                    Remove from Deck
+                </button>
+            </div>
+        </div>
 
-         <!-- First-run / Help installer modal -->
-         <div id="welcomeModal" class="modal" style="display: none">
-             <div
-                 class="modal-content"
-                 id="installerContent"
-                 style="max-width: 560px; padding: 22px 24px"
-             >
-                 <div
-                     style="
-                         display: flex;
-                         align-items: center;
-                         gap: 10px;
-                         margin-bottom: 6px;
-                     "
-                 >
-                     <h2
-                         style="
-                             margin: 0;
-                             color: var(--accent, #3584E4);
-                             flex: 1;
-                             font-size: 1.25rem;
-                         "
-                     >
-                         🥧 Pi PAO Practice — Setup
-                     </h2>
-                     <button
-                         type="button"
-                         id="installerCloseBtn"
-                         class="settings-btn"
-                         style="
-                             background: transparent;
-                             color: var(--modal-text-muted);
-                             border: 1px solid var(--modal-border);
-                             padding: 4px 10px;
-                         "
-                         title="Close"
-                     >
-                         ✕
-                     </button>
-                 </div>
-                 <div
-                     style="
-                         height: 4px;
-                         background: var(--modal-bg-subtle);
-                         border-radius: 2px;
-                         margin: 10px 0 14px;
-                         overflow: hidden;
-                     "
-                 >
-                     <div
-                         id="installerProgress"
-                         style="
-                             height: 100%;
-                             width: 20%;
-                             background: var(--accent, #3584E4);
-                             transition: width 0.25s;
-                         "
-                     ></div>
-                 </div>
-                  <div
-                      id="installerStepLabel"
-                      style="
-                          font-size: 0.75rem;
-                          color: var(--modal-text-muted);
-                          margin-bottom: 4px;
-                          text-transform: uppercase;
-                          letter-spacing: 1px;
-                      "
-                  >
-                      Step 1 of 5
-                  </div>
-                  <h3
-                      id="installerStepTitle"
-                      class="installer-step-title"
-                      style="
-                          margin: 0 0 12px 0;
-                          font-size: 1.1rem;
-                          color: var(--modal-text-color);
-                      "
-                  >
-                      Appearance
-                  </h3>
-                  <div id="installerBody"></div>
-                 <div
-                     style="
-                         display: flex;
-                         gap: 8px;
-                         justify-content: space-between;
-                         margin-top: 18px;
-                         flex-wrap: wrap;
-                     "
-                 >
-                     <button
-                         type="button"
-                         id="installerBackBtn"
-                         class="settings-btn"
-                         style="
-                             background: transparent;
-                             color: var(--modal-text-color);
-                             border: 1px solid var(--modal-border);
-                         "
-                     >
-                         ← Back
-                     </button>
-                     <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                         <button
-                             type="button"
-                             id="installerSkipBtn"
-                             class="settings-btn"
-                             style="
-                                 background: transparent;
-                                 color: var(--modal-text-muted);
-                                 border: 1px solid var(--modal-border);
-                             "
-                         >
-                             Skip
-                         </button>
-                         <button
-                             type="button"
-                             id="installerNextBtn"
-                             class="settings-btn"
-                         >
-                             Next →
-                         </button>
-                     </div>
-                 </div>
-             </div>
-         </div>
+        <!-- First-run / Help installer modal -->
+        <div id="welcomeModal" class="modal" style="display: none">
+            <div
+                class="modal-content"
+                id="installerContent"
+                style="max-width: 560px; padding: 22px 24px"
+            >
+                <div
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-bottom: 6px;
+                    "
+                >
+                    <h2
+                        style="
+                            margin: 0;
+                            color: var(--accent, #3584e4);
+                            flex: 1;
+                            font-size: 1.25rem;
+                        "
+                    >
+                        🥧 Pi PAO Practice — Setup
+                    </h2>
+                    <button
+                        type="button"
+                        id="installerCloseBtn"
+                        class="settings-btn"
+                        style="
+                            background: transparent;
+                            color: var(--modal-text-muted);
+                            border: 1px solid var(--modal-border);
+                            padding: 4px 10px;
+                        "
+                        title="Close"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div
+                    style="
+                        height: 4px;
+                        background: var(--modal-bg-subtle);
+                        border-radius: 2px;
+                        margin: 10px 0 14px;
+                        overflow: hidden;
+                    "
+                >
+                    <div
+                        id="installerProgress"
+                        style="
+                            height: 100%;
+                            width: 20%;
+                            background: var(--accent, #3584e4);
+                            transition: width 0.25s;
+                        "
+                    ></div>
+                </div>
+                <div
+                    id="installerStepLabel"
+                    style="
+                        font-size: 0.75rem;
+                        color: var(--modal-text-muted);
+                        margin-bottom: 4px;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    "
+                >
+                    Step 1 of 5
+                </div>
+                <h3
+                    id="installerStepTitle"
+                    class="installer-step-title"
+                    style="
+                        margin: 0 0 12px 0;
+                        font-size: 1.1rem;
+                        color: var(--modal-text-color);
+                    "
+                >
+                    Appearance
+                </h3>
+                <div id="installerBody"></div>
+                <div
+                    style="
+                        display: flex;
+                        gap: 8px;
+                        justify-content: space-between;
+                        margin-top: 18px;
+                        flex-wrap: wrap;
+                    "
+                >
+                    <button
+                        type="button"
+                        id="installerBackBtn"
+                        class="settings-btn"
+                        style="
+                            background: transparent;
+                            color: var(--modal-text-color);
+                            border: 1px solid var(--modal-border);
+                        "
+                    >
+                        ← Back
+                    </button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                        <button
+                            type="button"
+                            id="installerSkipBtn"
+                            class="settings-btn"
+                            style="
+                                background: transparent;
+                                color: var(--modal-text-muted);
+                                border: 1px solid var(--modal-border);
+                            "
+                        >
+                            Skip
+                        </button>
+                        <button
+                            type="button"
+                            id="installerNextBtn"
+                            class="settings-btn"
+                        >
+                            Next →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-         <script src="app.js"></script>
-     </body>
+        <script src="app.js"></script>
+    </body>
 </html>

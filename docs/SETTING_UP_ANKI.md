@@ -68,17 +68,17 @@ In the note type editor, click **Cards**. Create three card types:
 {{Number}}
 ```
 
-### Card 3: Number → Action
+### Card 3: Action → Number
 
 **Front:**
 ```
-{{Number}}
+{{Action}}
 ```
 **Back:**
 ```
-{{Action}}
-<hr id=answer>
 {{FrontSide}}
+<hr id=answer>
+{{Number}}
 ```
 
 > Actions don't have images — a plain text card is enough. The goal is just to keep the action → number association fresh.
