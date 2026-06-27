@@ -5585,8 +5585,7 @@
                         mediaFileMap = {};
                         let count = 0;
                         try {
-                            // fflate.unzip (async, web-worker) — non-blocking
-                            const entries = await fflate.unzip(
+                            const entries = fflate.unzipSync(
                                 new Uint8Array(arrayBuffer),
                             );
                             for (const name in entries) {
