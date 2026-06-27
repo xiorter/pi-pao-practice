@@ -1,6 +1,6 @@
 # Pi PAO Practice 🥧
 
-A browser-based tool for memorising the digits of **pi** (or any long number) using the **PAO (Person-Action-Object)** memory system and spaced repetition.
+A browser-based tool for memorising the digits of **pi** using the **PAO (Person-Action-Object)** memory system and spaced repetition.
 
 ➡️ **[Try it live →](https://xiorter.github.io/pi-pao-practice/)**
 
@@ -14,24 +14,24 @@ If you're new to memory techniques, three concepts underpin this app:
 - **Mind palace** — a familiar route or place where you "store" those scenes for later recall. [How to build a memory palace.](https://artofmemory.com/blog/how-to-build-a-memory-palace/)
 - **Major system** — a phonetic code that converts digits into consonant sounds, making it easier to invent memorable words for each number. [How the major system works.](https://artofmemory.com/blog/major-system/)
 
-The sample PAO list included in this repo is loosely based on the major system — it's the primary guide for 2-digit entries and a starting point for 3-digit ones — but it makes plenty of deliberate exceptions. For example, 3-digit objects for 000–099 are chemical elements ordered by atomic number (using [John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html) as a reference), and some entries follow number-shape logic rather than phonetics. Treat the sample as a starting point and personalise it freely.
+The [sample PAO list](./samples/sample-pao-system.xlsx) included in this repo is loosely based on the major system but has plenty of exceptions. For example, 3-digit objects for 000–099 are chemical elements ordered by atomic number, and some entries follow number-shape logic rather than phonetics. Treat the sample as a starting point as you will need to fill in blanks and it is highly recommended to be changed to what you are familiar with.
 
 ---
 
 ## Two modes
 
-| Mode | Chunk structure | Digits per chunk |
+| Mode | Chunk example | Digits per chunk |
 |---|---|---|
-| **2-2-2 (Century)** | Person (2) · Action (2) · Object (2) | 6 |
-| **3-2-3 (Millennium)** | Person (3) · Action (2) · Object (3) | 8 |
+| **2-2-2 (Century)** | 14 · 15 · 92 | 6 |
+| **3-2-3 (Millennium)** | 141 · 59 · 265 | 8 |
 
-The action list is shared between both modes. The app can auto-switch between modes by digit position (configurable in Settings → PAO Ranges). Most people start with 2-2-2 and add 3-2-3 later.
+The action list is shared between both modes. The app can auto-switch between modes by digit position (configurable in Settings → PAO Ranges). You can start with 2-2-2 and add 3-2-3 later.
 
 ---
 
 ## Getting started
 
-Open the app for the first time and the **setup wizard** walks you through loading your PAO list, optionally linking Anki images, and configuring appearance and cloud sync. You can revisit any of this later via **Settings** or the **?** button (which opens the [full documentation](https://github.com/xiorter/pi-pao-practice)).
+Open the app for the first time and the **setup wizard** walks you through loading your PAO list, optionally linking Anki images, and configuring appearance and cloud sync. You can revisit any of this later via **Settings**.
 
 A sample spreadsheet is included at [`samples/sample-pao-system.xlsx`](./samples/sample-pao-system.xlsx). For setting up Anki images, see [Setting up Anki](./docs/SETTING_UP_ANKI.md).
 
@@ -41,18 +41,22 @@ A sample spreadsheet is included at [`samples/sample-pao-system.xlsx`](./samples
 
 ### Typing practice
 
-The main screen shows the digits of pi one chunk at a time. You type the digits, and each one lights up green or red as you go. A helper bar above the input shows the PAO terms for the current chunk, and you can reveal the associated Anki images with `I`. Mistakes lock the input until corrected (configurable).
+The main screen shows the digits of pi you type seperated into chunks. If a mistake is made, it will highlight the incorrect digit with a different colour. Mistakes lock the input until corrected (configurable). You can use hints by revealing the number, word or image associated with the current chunk.
 
 When you complete a chunk, it is automatically rated **Good** in the SRS deck if it was already in the deck and you hadn't completed it earlier that day. This keeps your review schedule up to date just by practising normally.
 
+### Audio feedback
+
+As you type correct digits, a rising tone plays for each chunk, cycling through a musical scale. You can change the scale and adjust volume in **Settings → Audio**.
+
 ### Spaced repetition (SRS)
 
-The built-in SRS is modelled closely on Anki's algorithm. Each chunk of digits is a card, identified by its starting position in pi. Cards enter the deck in two ways:
+The built-in SRS is modelled closely on Anki's algorithm. Each chunk of digits is a card. Cards enter the deck in two ways:
 
 - **Automatically** when you type through a chunk (rated Good)
 - **Manually** by pressing `A` (Again) or `H` (Hard) on a chunk, or by enabling auto-mistake mode in Settings (any mistyped chunk is immediately added as Again)
 
-During a review session (`R`), each card is shown as a digit string. You recall the PAO image, then reveal and self-rate:
+During a review session (`R`), a card is shown with the P/A/O terms and numbers. Your goal is to recall the PAO image that appears after (within your mind palace). Once revealed, you self-rate:
 
 | Rating | Effect |
 |---|---|
@@ -65,12 +69,12 @@ New cards go through short learning steps (default: 1 min, 10 min) before gradua
 
 ### Everest mode
 
-Everest (`E`) is a streak-based recall drill. A random chunk is selected from within your chosen digit range, and you are shown only the chunk's digits — not its position in pi or its PAO label. Your task is to type the digits of the chunk immediately **before** it and the chunk immediately **after** it from memory, using the middle chunk as your PAO cue.
+Everest (`E`) is a streak-based recall drill. A random chunk is selected from within your chosen digit range, and you are shown the chunk's digits. Your task is to type the digits of the chunk immediately **before** it and the chunk immediately **after** it from memory.
 
 - A correct answer increments your streak; a wrong answer resets it to zero and adds the incorrectly-recalled chunks to the SRS deck as Again
-- After submitting, a three-block context panel reveals the correct digits and PAO labels for all three chunks, so you can review what you missed
-- **Raw mode** hides the chunk number and pi position during the question, making it harder
-- **Easy mode** shows your Anki images for the middle chunk as a hint while you answer
+- After submitting, the correct digits and PAO labels for all three chunks are revealed, so you can review what you missed
+- **Raw mode** hides the chunk number and pi position during the question
+- **Easy mode** shows the P/O images for the middle chunk as a hint while you answer
 - High scores are tracked separately per mode (normal / raw / easy / raw+easy) and per digit range
 
 ### Stats
@@ -78,8 +82,8 @@ Everest (`E`) is a streak-based recall drill. A random chunk is selected from wi
 The stats screen (`S`) shows:
 
 - **Summary figures** — total digits typed, current streak, longest streak, best day, daily average, and days-learned percentage (days with any activity divided by days since you started)
-- **Yearly activity heatmap** — one square per day, coloured by digits typed and/or SRS reviews completed. Future dates show upcoming scheduled review load. Hover any square for the exact counts. Switch between years with the arrows
-- **Pi coverage map** — one square per chunk across all of pi, coloured by SRS status. Two view modes: *Due* (darker = due sooner; a distinct purple for overdue chunks) and *Ease* (darker = harder ease factor). Hover any square to see the PAO label, digits, images, and due date. This gives you an at-a-glance picture of how far your SRS deck reaches and where the trouble spots are
+- **Yearly activity heatmap** — one square per day, coloured by digits typed and/or SRS reviews completed. Future dates show upcoming scheduled review load. Hover over any square for the exact counts. Switch between years with the arrows
+- **Pi coverage map** — one square per chunk across all of pi, coloured by SRS status. Two view modes: *Due* (darker = due sooner) and *Ease* (darker = harder ease factor). Hover any square to see the PAO label, digits, images, and due date. Right-click a square to edit its SRS due date or remove it from the deck. This gives you an at-a-glance picture of how much your SRS deck covers and where the trouble spots are.
 
 ---
 
