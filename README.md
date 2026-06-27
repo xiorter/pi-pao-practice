@@ -25,78 +25,61 @@ The sample PAO list included in this repo is loosely based on the major system �
 | **2-2-2 (Century)** | Person (2) · Action (2) · Object (2) | 6 |
 | **3-2-3 (Millennium)** | Person (3) · Action (2) · Object (3) | 8 |
 
-The action list is shared between both modes. The app auto-switches between modes by digit position (configurable in **Settings → PAO Ranges**). Most people start with 2-2-2 and add 3-2-3 later.
-
----
-
-## Features
-
-- 🥧 Digit typing practice with live colour feedback
-- 🃏 Built-in SRS flashcards for chunks you struggle with
-- 📈 Heatmaps and stats — daily goal, yearly activity, pi-coverage map
-- 🏔️ Everest mode — race through as many digits as possible
-- 🌗 Dark mode and mobile-friendly layout
-- 🎨 Customisable colours — correct/incorrect/accent/background
-- ☁️ Optional Firebase sync — bring your own free Firebase project
-- 🔥 Streaks and daily goals
-- ⌨️ Keyboard shortcuts for fast practice
-- 💾 Everything stored locally in your browser — no account required
+The action list is shared between both modes. The app can auto-switch between modes by digit position (configurable in Settings → PAO Ranges). Most people start with 2-2-2 and add 3-2-3 later.
 
 ---
 
 ## Getting started
 
-Open the app for the first time and the **setup wizard** will walk you through five steps:
+Open the app for the first time and the **setup wizard** walks you through loading your PAO list, optionally linking Anki images, and configuring appearance and cloud sync. You can revisit any of this later via **Settings** or the **?** button (which opens the [full documentation](https://github.com/xiorter/pi-pao-practice)).
 
-1. **Appearance** — light/dark mode and colour scheme
-2. **PAO source** — load your PAO list from an Excel file (recommended) or paste it into textareas. A sample spreadsheet is at [`samples/sample-pao-system.xlsx`](./samples/sample-pao-system.xlsx)
-3. **PAO ranges** — set which digit positions use 2-2-2 vs 3-2-3
-4. **Anki images** *(optional)* — link images from your Anki deck to each PAO entry. See [Setting up Anki](./docs/SETTING_UP_ANKI.md)
-5. **Cloud sync** *(optional)* — connect a Firebase project to sync progress across devices
-
-You can revisit any of these later via **Settings**.
+A sample spreadsheet is included at [`samples/sample-pao-system.xlsx`](./samples/sample-pao-system.xlsx). For setting up Anki images, see [Setting up Anki](./docs/SETTING_UP_ANKI.md).
 
 ---
 
-## Loading your PAO list
+## Features
 
-### Excel (recommended)
+### Typing practice
 
-Upload a `.xlsx` using the default column layout below — or change the column mapping in Settings if your file is structured differently.
+The main screen shows the digits of pi one chunk at a time. You type the digits, and each one lights up green or red as you go. A helper bar above the input shows the PAO terms for the current chunk, and you can reveal the associated Anki images with `I`. Mistakes lock the input until corrected (configurable).
 
-| Column | Field |
+When you complete a chunk, it is automatically rated **Good** in the SRS deck if it was already in the deck and you hadn't completed it earlier that day. This keeps your review schedule up to date just by practising normally.
+
+### Spaced repetition (SRS)
+
+The built-in SRS is modelled closely on Anki's algorithm. Each chunk of digits is a card, identified by its starting position in pi. Cards enter the deck in two ways:
+
+- **Automatically** when you type through a chunk (rated Good)
+- **Manually** by pressing `A` (Again) or `H` (Hard) on a chunk, or by enabling auto-mistake mode in Settings (any mistyped chunk is immediately added as Again)
+
+During a review session (`R`), each card is shown as a digit string. You recall the PAO image, then reveal and self-rate:
+
+| Rating | Effect |
 |---|---|
-| E | Number |
-| F | 3-digit Person |
-| G | 2-digit Action (shared) |
-| H | 3-digit Object |
-| L | 2-digit Person |
-| M | 2-digit Object |
+| **Again** | Card returns to learning steps, due today |
+| **Hard** | Interval × 1.2, ease factor −0.15 |
+| **Good** | Interval × ease factor |
+| **Easy** | Interval × ease factor × 1.3, ease factor +0.15 |
 
-### Textarea
+New cards go through short learning steps (default: 1 min, 10 min) before graduating to spaced intervals. Lapsed cards go through a shorter relearning step before returning to review. The next interval for each rating is shown on the buttons before you choose.
 
-Paste one entry per line into the Person, Action, and Object fields. Flexible separators are accepted: ` - `, tab, comma, colon, or plain spaces. Semicolons can separate records on the same line. Lines starting with `#` are ignored.
+### Everest mode
 
----
+Everest (`E`) is a streak-based recall drill. A random chunk is selected from within your chosen digit range, and you are shown only the chunk's digits — not its position in pi or its PAO label. Your task is to type the digits of the chunk immediately **before** it and the chunk immediately **after** it from memory, using the middle chunk as your PAO cue.
 
-## Loading Anki images
+- A correct answer increments your streak; a wrong answer resets it to zero and adds the incorrectly-recalled chunks to the SRS deck as Again
+- After submitting, a three-block context panel reveals the correct digits and PAO labels for all three chunks, so you can review what you missed
+- **Raw mode** hides the chunk number and pi position during the question, making it harder
+- **Easy mode** shows your Anki images for the middle chunk as a hint while you answer
+- High scores are tracked separately per mode (normal / raw / easy / raw+easy) and per digit range
 
-The app can display your Anki card images during practice. It needs two things:
+### Stats
 
-1. **A `.txt` export from your Anki deck** — this maps digit numbers to image filenames. In Anki: **File → Export → Notes in Plain Text → uncheck Include tags → Export**
-2. **Your Anki `collection.media` folder** (or a `.zip` of it) — this is where the actual image files live
+The stats screen (`S`) shows:
 
-Load both in **Settings → Anki Images**:
-- *Millennium PAO (.txt)* — for 3-digit entries
-- *Century PAO (.txt)* — for 2-digit entries
-
-Don't have an Anki deck yet? See [Setting up Anki](./docs/SETTING_UP_ANKI.md).
-
-### Getting the media into the app
-
-The app detects your browser and shows the right option automatically. On Chrome and Edge desktop you'll get a folder picker; on Firefox, Safari, and mobile you'll get a zip upload instead. Either way, the images are stored locally in IndexedDB and persist across reloads.
-
-> The folder picker isn't available on all browsers due to a browser API limitation — this is why the zip option exists.
+- **Summary figures** — total digits typed, current streak, longest streak, best day, daily average, and days-learned percentage (days with any activity divided by days since you started)
+- **Yearly activity heatmap** — one square per day, coloured by digits typed and/or SRS reviews completed. Future dates show upcoming scheduled review load. Hover any square for the exact counts. Switch between years with the arrows
+- **Pi coverage map** — one square per chunk across all of pi, coloured by SRS status. Two view modes: *Due* (darker = due sooner; a distinct purple for overdue chunks) and *Ease* (darker = harder ease factor). Hover any square to see the PAO label, digits, images, and due date. This gives you an at-a-glance picture of how far your SRS deck reaches and where the trouble spots are
 
 ---
 
@@ -131,7 +114,7 @@ Then open [http://localhost:8000](http://localhost:8000). A local server is requ
 
 - [Art of Memory forum](https://forum.artofmemory.com) — the main community for memory techniques
 - [Maya's Millennium PAO](https://forum.artofmemory.com/t/mayas-millenium-pao/32629) — the community list the sample data is based on
-- [John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html) — image mnemonics to help remember elements 00-99
+- [John Pratt's Atomic Memory system](https://johnpratt.com/atomic/atomic.html) — image mnemonics to help remember elements 00–99
 
 ---
 

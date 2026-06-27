@@ -8,7 +8,7 @@ This guide picks up where the spreadsheet leaves off. By this point you should h
 
 | | Century (2-2-2) | Millennium (3-2-3) |
 |---|---|---|
-| Deck size | ~100 persons + ~100 objects | ~1000 persons + ~1000 objects |
+| Deck size | ~300 | ~2100 |
 | Digits per chunk | 6 | 8 |
 | Effort to set up | Low | High |
 | Good for | Beginners, or anyone who wants a working system quickly | Advanced memorisers going for large digit counts |
@@ -87,7 +87,7 @@ In the note type editor, click **Cards**. Create three card types:
 
 ## Step 3 — Import your PAO list into Anki
 
-The spreadsheet has two dedicated sheets for import: **Century Import** (2-digit) and **Millennium Import** (3-digit). Each has columns in the order Anki expects: `Number`, `Person`, `Action`, `Object`, `PersonImg`, `ObjectImg`.
+The spreadsheet has two dedicated sheets for import: **Century Import** (2-digit) and **Millennium Import** (3-digit). Each has columns in the order Anki expects: `Number`, `Person`, `Action`, `Object`.
 
 Import the sheet(s) you need:
 
@@ -97,8 +97,7 @@ Import the sheet(s) you need:
 4. In the import dialog:
    - Set **Note Type** to `PAO`
    - Set **Deck** to `Century PAO` or `Millennium PAO` (create the deck first if it doesn't exist)
-   - Map each column to its corresponding field: Column 1 → Number, Column 2 → Person, Column 3 → Action, Column 4 → Object, Column 5 → PersonImg, Column 6 → ObjectImg
-   - Check **"Allow HTML in fields"**
+   - Map each column to its corresponding field: Column 1 → Number, Column 2 → Person, Column 3 → Action, Column 4 → Object
 5. Click **Import**.
 
 > If you want both Century and Millennium, repeat the process — save each sheet as a separate CSV and import into its own deck.
@@ -107,18 +106,12 @@ Import the sheet(s) you need:
 
 ## Step 4 — Add images to your cards
 
-The `PersonImg` and `ObjectImg` fields arrive blank after import. You fill them in card by card inside Anki.
-
-Some sample images are provided in [`samples/media/`](../samples/media/) for the entries in the sample PAO list. Copy these into Anki's `collection.media` folder (find it via **Tools → Check Media**, then click the folder path shown).
-
-For entries not covered by the sample images — or if you've personalised the list with your own people and objects — you'll need to add images yourself:
+The `PersonImg` and `ObjectImg` fields arrive blank after import. You fill them in card by card inside Anki:
 
 1. Open the **Card Browser** in Anki (**Browse** button on the main screen).
 2. Find the card you want to add an image to.
 3. Click into the `PersonImg` or `ObjectImg` field.
 4. Either paste an image from your clipboard, or click the image icon in the editor toolbar to upload from your device.
-
-> The more personal and vivid the image, the better it will stick. Don't worry about having every image immediately — add them as you go.
 
 ---
 

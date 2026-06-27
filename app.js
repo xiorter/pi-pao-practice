@@ -887,8 +887,18 @@
                         const numRaw = cols[0].trim();
                         if (!numRaw || numRaw === "-") continue;
 
-                        const personImgHtml = cols[3] || "";
-                        const objectImgHtml = cols[4] || "";
+                        // Two supported Anki-export shapes:
+                        //   5-col: Number | Person | Object | PersonImg | ObjectImg
+                        //   6-col: Number | Person | Action | Object | PersonImg | ObjectImg
+                        // (The 6-col form is for decks that include the shared
+                        // 2-digit Action field as a separate Anki field.)
+                        const hasAction = cols.length >= 6;
+                        const personImgHtml = hasAction
+                            ? cols[4] || ""
+                            : cols[3] || "";
+                        const objectImgHtml = hasAction
+                            ? cols[5] || ""
+                            : cols[4] || "";
 
                         const personSrc = extractImgFilename(personImgHtml);
                         const objectSrc = extractImgFilename(objectImgHtml);
