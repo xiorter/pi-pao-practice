@@ -141,9 +141,6 @@
                     // Also hide the folder button if the API is missing.
                     const fb = document.getElementById("loadMediaFolderBtn");
                     if (fb) fb.style.display = folderSupported ? "" : "none";
-                    // Show the "local dev only" note when on a hosted origin
-                    const note = document.getElementById("loadMediaLocalNote");
-                    if (note) note.style.display = _isLocalDev() ? "none" : "";
                 }
 
                 // Reflect the current paoRangeMode in the settings UI:
