@@ -491,11 +491,13 @@
                 }
 
                 function _fbStatus(msg, color) {
-                    const el = document.getElementById("firebaseStatus");
-                    if (el) {
+                    const primary = document.getElementById("firebaseStatus");
+                    const extras = document.querySelectorAll(".js-firebase-status");
+                    const all = primary ? [primary, ...Array.from(extras).filter(e => e !== primary)] : Array.from(extras);
+                    all.forEach(el => {
                         el.textContent = msg;
                         el.style.color = color || "#888";
-                    }
+                    });
                 }
 
                 function _fbUpdateLastSync() {
@@ -897,11 +899,13 @@
 
                         const personSrc = extractImgFilename(personImgHtml);
                         const objectSrc = extractImgFilename(objectImgHtml);
+                        const personName = (cols[1] || "").trim();
+                        const objectName = (hasAction ? cols[3] : cols[2] || "").trim();
 
                         // Store under both padded forms so pNum lookups always hit
                         const num2 = numRaw.padStart(2, "0");
                         const num3 = numRaw.padStart(3, "0");
-                        const entry = { personSrc, objectSrc };
+                        const entry = { personSrc, objectSrc, personName, objectName };
                         result[numRaw] = entry;
                         result[num2] = entry;
                         result[num3] = entry;
@@ -1432,7 +1436,7 @@
                                         ? "anki-status loaded"
                                         : "anki-status";
                             } else {
-                                mfStatus.textContent = "No folder selected.";
+                                mfStatus.textContent = "No media selected.";
                                 mfStatus.className = "anki-status";
                             }
                         }
@@ -5247,6 +5251,13 @@
                     srsUpdateBadge();
 
                     // ── Firebase Sync UI wiring ──
+                    const _fbCfgInput = document.getElementById("firebaseConfigInput");
+                    if (_fbCfgInput) {
+                        // Live border validation as the user types
+                        _fbCfgInput.addEventListener("input", () => _fbValidateBorder(_fbCfgInput));
+                        // Apply border on load if there's an existing value
+                        if (_fbCfgInput.value) _fbValidateBorder(_fbCfgInput);
+                    }
                     document.getElementById("firebaseConnectBtn").onclick =
                         () => {
                             const cfg = document
@@ -5271,6 +5282,56 @@
                     };
                     // Init firebase if previously configured
                     _fbInit();
+
+                    // ── Media folder path "Test" button (local dev only) ──
+                    const _testPathBtn = document.getElementById("ankiMediaPathTestBtn");
+                    const _testPathStatus = document.getElementById("ankiMediaPathTestStatus");
+                    if (_testPathBtn) {
+                        if (!_isLocalDev()) {
+                            const pathRow = _testPathBtn.closest(".setting-row");
+                            if (pathRow) pathRow.style.display = "none";
+                        } else {
+                            _testPathBtn.onclick = async () => {
+                                if (!_testPathStatus) return;
+                                _testPathStatus.style.display = "";
+                                _testPathStatus.className = "anki-status";
+                                // If mediaFileMap has entries, report those are in use
+                                const mapCount = Object.keys(mediaFileMap).length;
+                                if (mapCount > 0) {
+                                    _testPathStatus.textContent = `✓ Using uploaded media (${mapCount} images in memory — takes priority over path)`;
+                                    _testPathStatus.className = "anki-status loaded";
+                                    return;
+                                }
+                                // Otherwise test the configured path by fetching a sample image
+                                const path = (document.getElementById("ankiMediaPathInput")?.value || "media").trim();
+                                // Find a sample filename from the loaded txt exports
+                                let sample = null;
+                                for (const map of [ankiImages, ankiImages2]) {
+                                    for (const entry of Object.values(map)) {
+                                        if (entry.personSrc) { sample = entry.personSrc; break; }
+                                    }
+                                    if (sample) break;
+                                }
+                                if (!sample) {
+                                    _testPathStatus.textContent = "Load a .txt export first to get a sample filename to test.";
+                                    return;
+                                }
+                                const url = path ? `${path}/${sample}` : sample;
+                                _testPathStatus.textContent = `Testing ${url}…`;
+                                try {
+                                    const res = await fetch(url, { method: "HEAD" });
+                                    if (res.ok) {
+                                        _testPathStatus.textContent = `✓ Path working — found ${sample} at "${path}"`;
+                                        _testPathStatus.className = "anki-status loaded";
+                                    } else {
+                                        _testPathStatus.textContent = `✗ ${res.status} for "${url}" — check your path`;
+                                    }
+                                } catch (e) {
+                                    _testPathStatus.textContent = `✗ Could not fetch "${url}" — ${e.message}`;
+                                }
+                            };
+                        }
+                    }
 
                     document.getElementById("srsAddRangeBtn").onclick = () => {
                         const fromPos = parseInt(
@@ -5401,6 +5462,8 @@
                             statusEl.textContent = `✓ ${count} entries loaded`;
                             statusEl.className = "anki-status loaded";
                             alert(`Loaded ${count} Millennium PAO entries!`);
+                            _checkMediaMatches();
+                            _installerUpdateNextButton();
                         };
                         reader.readAsText(f);
                         e.target.value = "";
@@ -5423,6 +5486,8 @@
                             statusEl2.textContent = `✓ ${count} entries loaded`;
                             statusEl2.className = "anki-status loaded";
                             alert(`Loaded ${count} Century PAO entries!`);
+                            _checkMediaMatches();
+                            _installerUpdateNextButton();
                         };
                         reader.readAsText(f);
                         e.target.value = "";
@@ -5483,12 +5548,8 @@
                         }
                         mediaFolderName = dirHandle.name;
                         saveSettings();
-                        const statusEl =
-                            document.getElementById("mediaFolderStatus");
-                        if (statusEl) {
-                            statusEl.textContent = `✓ ${dirHandle.name} (${count} files)`;
-                            statusEl.className = "anki-status loaded";
-                        }
+                        _setMediaStatus(`✓ ${dirHandle.name} (${count} files)`, true);
+                        _checkMediaMatches();
                         return count;
                     }
 
@@ -5588,14 +5649,79 @@
                         } catch (e) {}
                     }
 
+                    // Updates every .js-media-status element (settings + installer).
                     function _setMediaStatus(text, loaded) {
-                        const el =
-                            document.getElementById("mediaFolderStatus");
-                        if (!el) return;
-                        el.textContent = text;
-                        el.className = loaded
-                            ? "anki-status loaded"
-                            : "anki-status";
+                        document.querySelectorAll(".js-media-status").forEach(el => {
+                            el.textContent = text;
+                            el.className = "anki-status js-media-status" + (loaded ? " loaded" : "");
+                        });
+                    }
+
+                    // Checks whether all images referenced by loaded .txt exports
+                    // are present in mediaFileMap. Updates all .js-media-match-warning
+                    // elements with a yellow warning listing missing term names/files.
+                    function _checkMediaMatches() {
+                        const hasTxt =
+                            Object.keys(ankiImages).length > 0 ||
+                            Object.keys(ankiImages2).length > 0;
+                        const hasMedia = Object.keys(mediaFileMap).length > 0;
+                        const warn = document.querySelectorAll(".js-media-match-warning");
+                        if (!hasTxt || !hasMedia) {
+                            warn.forEach(el => { el.style.display = "none"; el.innerHTML = ""; });
+                            return;
+                        }
+                        // Collect unique missing items by filename, tracking
+                        // the best human-readable label (term name) for each.
+                        const missingMap = new Map(); // filename → label
+                        for (const [map, kind] of [[ankiImages, "Mill"], [ankiImages2, "Cent"]]) {
+                            const seen = new Set();
+                            for (const [key, entry] of Object.entries(map)) {
+                                // ankiImages stores each entry 3× (raw/padded).
+                                // Deduplicate by personSrc+objectSrc pair.
+                                const sig = (entry.personSrc || "") + "|" + (entry.objectSrc || "");
+                                if (seen.has(sig)) continue;
+                                seen.add(sig);
+                                if (entry.personSrc && !mediaFileMap[entry.personSrc]) {
+                                    if (!missingMap.has(entry.personSrc))
+                                        missingMap.set(entry.personSrc, `${entry.personName || key} (${kind} person)`);
+                                }
+                                if (entry.objectSrc && !mediaFileMap[entry.objectSrc]) {
+                                    if (!missingMap.has(entry.objectSrc))
+                                        missingMap.set(entry.objectSrc, `${entry.objectName || key} (${kind} object)`);
+                                }
+                            }
+                        }
+                        warn.forEach(el => {
+                            if (missingMap.size === 0) {
+                                el.style.display = "none";
+                                el.innerHTML = "";
+                                return;
+                            }
+                            const items = Array.from(missingMap.entries());
+                            const preview = items.slice(0, 25).map(([f, label]) =>
+                                `<span style="opacity:0.7">${label}:</span> ${f}`
+                            ).join("<br>");
+                            const more = items.length > 25 ? `<br><em>…and ${items.length - 25} more</em>` : "";
+                            el.style.display = "block";
+                            el.innerHTML = `⚠ ${missingMap.size} image${missingMap.size === 1 ? "" : "s"} not found in loaded media:<br><code style="font-size:0.74rem;line-height:1.6">${preview}${more}</code>`;
+                        });
+                    }
+
+                    // Sets a coloured border on a Firebase config textarea based on
+                    // whether its content is valid parseable JSON with required keys.
+                    function _fbValidateBorder(ta) {
+                        if (!ta) return;
+                        const v = ta.value.trim();
+                        if (!v) { ta.style.border = ""; return; }
+                        try {
+                            let s = v.replace(/(?:const|let|var)\s+\w+\s*=\s*/, "").replace(/;$/, "").trim();
+                            s = s.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+                            const cfg = JSON.parse(s);
+                            if (!cfg.apiKey || !cfg.projectId) throw new Error("missing keys");
+                            ta.style.border = "1.5px solid var(--accent, #3584E4)";
+                        } catch (e) {
+                            ta.style.border = "1.5px solid #f87171";
+                        }
                     }
 
                     async function loadMediaFromZip(
@@ -5689,10 +5815,12 @@
                                     );
                                 }
                                 saveSettings();
-                                _setMediaStatus(
-                                    `✓ ${filename} (${count} images)`,
-                                    true,
-                                );
+                                const neededTotal = neededFiles.size;
+                                const countStr = neededTotal > 0
+                                    ? `${count} / ${neededTotal}`
+                                    : `${count}`;
+                                _setMediaStatus(`✓ ${filename} (${countStr} images)`, true);
+                                _checkMediaMatches();
                                 resolve(count);
                             });
                         });
@@ -5762,29 +5890,14 @@
                                 "Pick individual image files from your collection.media folder. " +
                                 "Load your Anki .txt export first so only the files you need are shown.";
 
-                            filesBtn.onclick = () => {
-                                // Collect needed filenames from loaded txt exports
-                                const needed = new Set();
-                                for (const map of [ankiImages, ankiImages2]) {
-                                    for (const entry of Object.values(map)) {
-                                        if (entry.personSrc) needed.add(entry.personSrc);
-                                        if (entry.objectSrc) needed.add(entry.objectSrc);
-                                    }
-                                }
-                                const hintEl = document.getElementById("mediaFilesHint");
-                                if (hintEl) {
-                                    hintEl.textContent =
-                                        needed.size > 0
-                                            ? `${needed.size} files needed — navigate to your collection.media folder and select them.`
-                                            : "Load your Anki .txt export first to see which files are needed.";
-                                }
-                                filesInput.click();
-                            };
+                            filesBtn.onclick = () => filesInput.click();
 
-                            filesInput.onchange = async (ev) => {
+                            filesInput.onchange = (ev) => {
                                 const files = Array.from(ev.target.files);
+                                ev.target.value = "";
                                 if (!files.length) return;
 
+                                // Build neededFiles set from loaded txts
                                 const neededFiles = new Set();
                                 for (const map of [ankiImages, ankiImages2]) {
                                     for (const entry of Object.values(map)) {
@@ -5792,55 +5905,47 @@
                                         if (entry.objectSrc) neededFiles.add(entry.objectSrc);
                                     }
                                 }
+                                const neededTotal = neededFiles.size;
 
-                                _setMediaStatus(`Loading ${files.length} files…`);
-                                Object.values(mediaFileMap).forEach((u) => {
-                                    try { URL.revokeObjectURL(u); } catch (e) {}
-                                });
+                                _setMediaStatus(`Reading ${files.length} file${files.length === 1 ? "" : "s"}…`);
+                                // Revoke old object URLs
+                                Object.values(mediaFileMap).forEach(u => { try { URL.revokeObjectURL(u); } catch(e) {} });
                                 mediaFileMap = {};
 
-                                let count = 0;
-                                const rawMap = {};
+                                // Create object URLs synchronously (instant — no await needed).
+                                // This is the fast path that makes the UI feel immediate.
+                                const accepted = [];
                                 for (const file of files) {
                                     const lower = file.name.toLowerCase();
-                                    if (!lower.match(/\.(jpg|jpeg|png|gif|webp|svg)$/))
-                                        continue;
-                                    // Skip unrelated files if we know what we need
-                                    if (neededFiles.size > 0 && !neededFiles.has(file.name))
-                                        continue;
+                                    if (!lower.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) continue;
+                                    if (neededFiles.size > 0 && !neededFiles.has(file.name)) continue;
                                     mediaFileMap[file.name] = URL.createObjectURL(file);
-                                    // Read as ArrayBuffer for IDB persistence
-                                    try {
-                                        rawMap[file.name] = new Uint8Array(
-                                            await file.arrayBuffer(),
-                                        );
-                                    } catch (e) {}
-                                    count++;
+                                    accepted.push(file);
                                 }
 
-                                mediaFolderName = `${count} files`;
+                                const count = accepted.length;
+                                const countStr = neededTotal > 0 ? `${count} / ${neededTotal}` : `${count}`;
+                                mediaFolderName = countStr + " images";
                                 saveSettings();
-                                saveExtractedBlobs(rawMap, `${count} files`).catch(
-                                    (e) => console.warn("Could not persist blobs:", e),
-                                );
-                                _setMediaStatus(`✓ ${count} images loaded`, true);
-                                ev.target.value = "";
+                                _setMediaStatus(`✓ ${countStr} image${count === 1 ? "" : "s"} loaded`, true);
+                                _checkMediaMatches();
+
+                                // Read ArrayBuffers for IDB persistence in parallel
+                                // in the background — don't block the UI.
+                                if (accepted.length > 0) {
+                                    Promise.all(
+                                        accepted.map(f => f.arrayBuffer().then(b => [f.name, new Uint8Array(b)]))
+                                    ).then(pairs => {
+                                        const rawMap = Object.fromEntries(pairs);
+                                        return saveExtractedBlobs(rawMap, mediaFolderName);
+                                    }).catch(e => console.warn("Could not persist blobs:", e));
+                                }
                             };
 
-                            // Hint text element
-                            const hintSpan = document.createElement("span");
-                            hintSpan.id = "mediaFilesHint";
-                            hintSpan.style.cssText =
-                                "display:block; font-size:0.82em; color:#888; margin-top:3px;";
-
+                            zipLabel.appendChild(filesBtn);
                             zipLabel.parentElement.insertBefore(
                                 filesInput,
                                 zipLabel.nextSibling,
-                            );
-                            zipLabel.appendChild(filesBtn);
-                            zipLabel.parentElement.insertBefore(
-                                hintSpan,
-                                filesInput.nextSibling,
                             );
                         }
                     })();
@@ -5905,6 +6010,7 @@
                                 `✓ ${mediaFolderName} (${keys.length} images)`,
                                 true,
                             );
+                            _checkMediaMatches();
                         } catch (e) {
                             console.warn("Blob restore failed:", e);
                         }
@@ -6650,7 +6756,15 @@
                     if (!nextBtn) return;
                     const step = _INSTALLER_STEPS[_installerStep];
                     let canProceed = true;
-                    if (step === "paoSource") {
+                    if (step === "ankiImages") {
+                        const hasTxt =
+                            Object.keys(ankiImages).length > 0 ||
+                            Object.keys(ankiImages2).length > 0;
+                        const hasMedia = Object.keys(mediaFileMap).length > 0;
+                        // Next is disabled only when the user has done nothing at all.
+                        // If they've uploaded at least a txt OR some media, allow Next.
+                        canProceed = hasTxt || hasMedia;
+                    } else if (step === "paoSource") {
                         const sel = document.querySelector(
                             'input[name="instPaoSource"]:checked',
                         );
@@ -7154,111 +7268,157 @@
                             'The .txt exports below link your PAO terms to image filenames. To get the files, <a href="https://github.com/xiorter/pi-pao-practice/blob/main/docs/SETTING_UP_ANKI.md" target="_blank" rel="noopener" style="color:var(--accent)">read the Anki setup guide</a>.',
                         ),
                     );
-                    // .txt uploads
+
+                    // .txt uploads — proxy through the real hidden inputs so all
+                    // shared state (ankiImages, ankiImages2) is updated in one place.
                     const upWrap = document.createElement("div");
                     upWrap.className = "setting-row";
-                    upWrap.style.cssText =
-                        "flex-direction:column;align-items:flex-start;gap:6px;";
+                    upWrap.style.cssText = "flex-direction:column;align-items:flex-start;gap:6px;";
                     upWrap.innerHTML = `
                         <label style="font-weight:bold">Millennium PAO — 3-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt1" accept=".txt">
+                        <div id="instAnkiStatus1" class="anki-status">${Object.keys(ankiImages).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages).length/3)} entries loaded` : "No file loaded."}</div>
                         <label style="font-weight:bold">Century PAO — 2-digit images (.txt):</label>
-                        <input type="file" id="instAnkiTxt2" accept=".txt">`;
+                        <input type="file" id="instAnkiTxt2" accept=".txt">
+                        <div id="instAnkiStatus2" class="anki-status">${Object.keys(ankiImages2).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages2).length/3)} entries loaded` : "No file loaded."}</div>`;
                     body.appendChild(upWrap);
-                    // Media loaders
+
+                    // Media loaders — same set of buttons as Settings → Anki Images.
                     const media = document.createElement("div");
                     media.className = "setting-row";
-                    media.style.cssText =
-                        "flex-direction:column;align-items:flex-start;gap:8px;";
+                    media.style.cssText = "flex-direction:column;align-items:flex-start;gap:8px;";
                     const folderSupported = "showDirectoryPicker" in window;
-                    const folderBtn = folderSupported
+                    const folderBtnHtml = folderSupported
                         ? `<button type="button" id="instMediaFolderBtn" class="settings-btn">Choose media folder</button>`
                         : "";
-                    media.innerHTML = `<label id="instLoadMediaLabel" style="font-weight:bold">${
-                        folderSupported
-                            ? "Load media (pick a folder or upload a .zip):"
-                            : "Load media (upload a .zip):"
-                    }</label>
+                    media.innerHTML = `
+                        <label style="font-weight:bold">Load media:</label>
                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                            ${folderBtn}
+                            ${folderBtnHtml}
                             <label for="instMediaZip" class="settings-btn" style="cursor:pointer;display:inline-block;">Upload media .zip</label>
                             <input type="file" id="instMediaZip" accept=".zip" style="display:none">
+                            <button type="button" id="instMediaFilesBtn" class="settings-btn">Select image files…</button>
+                            <input type="file" id="instMediaFiles" multiple accept="image/*" style="display:none">
                         </div>
-                        <div id="instMediaStatus" class="anki-status" style="text-align:left;">No folder selected.</div>`;
+                        <div id="instMediaStatus" class="anki-status js-media-status" style="text-align:left;">No media selected.</div>
+                        <div class="js-media-match-warning" style="display:none;font-size:0.8rem;color:#b45309;background:rgba(251,191,36,0.12);border:1px solid #f59e0b;border-radius:4px;padding:6px 8px;margin-top:2px;line-height:1.5;"></div>`;
                     body.appendChild(media);
 
-                    // Wire the inputs in this step — IMPORTANT: do NOT close the modal on action.
                     setTimeout(() => {
-                        const t1 = document.getElementById("instAnkiTxt1");
-                        const t2 = document.getElementById("instAnkiTxt2");
-                        if (t1) {
-                            t1.addEventListener("change", (e) => {
-                                const real = document.getElementById(
-                                    "ankiTxtUpload",
-                                );
+                        // ── Txt proxies ──
+                        const proxyTxt = (instId, realId, statusId) => {
+                            const inst = document.getElementById(instId);
+                            if (!inst) return;
+                            inst.addEventListener("change", (e) => {
+                                const real = document.getElementById(realId);
                                 if (real) {
                                     const dt = new DataTransfer();
-                                    if (e.target.files[0])
-                                        dt.items.add(e.target.files[0]);
+                                    if (e.target.files[0]) dt.items.add(e.target.files[0]);
                                     real.files = dt.files;
                                     real.dispatchEvent(new Event("change"));
                                 }
-                            });
-                        }
-                        if (t2) {
-                            t2.addEventListener("change", (e) => {
-                                const real = document.getElementById(
-                                    "ankiTxtUpload2",
-                                );
-                                if (real) {
-                                    const dt = new DataTransfer();
-                                    if (e.target.files[0])
-                                        dt.items.add(e.target.files[0]);
-                                    real.files = dt.files;
-                                    real.dispatchEvent(new Event("change"));
+                                // Mirror status into the installer's own status div
+                                const instStatus = document.getElementById(statusId);
+                                if (instStatus) {
+                                    const realStatus = document.getElementById(
+                                        realId === "ankiTxtUpload" ? "ankiLoadStatus" : "ankiLoadStatus2"
+                                    );
+                                    if (realStatus) {
+                                        instStatus.textContent = realStatus.textContent;
+                                        instStatus.className = realStatus.className;
+                                    }
                                 }
+                                _installerUpdateNextButton();
                             });
-                        }
-                        const fb = document.getElementById(
-                            "instMediaFolderBtn",
-                        );
+                        };
+                        proxyTxt("instAnkiTxt1", "ankiTxtUpload", "instAnkiStatus1");
+                        proxyTxt("instAnkiTxt2", "ankiTxtUpload2", "instAnkiStatus2");
+
+                        // ── Folder picker ──
+                        const fb = document.getElementById("instMediaFolderBtn");
                         if (fb) {
                             fb.addEventListener("click", async () => {
                                 try {
-                                    const handle =
-                                        await window.showDirectoryPicker();
+                                    const handle = await window.showDirectoryPicker();
                                     await loadMediaFromHandle(handle);
                                     await clearExtractedBlobs();
-                                    const s = document.getElementById(
-                                        "instMediaStatus",
-                                    );
-                                    if (s) {
-                                        s.textContent = `✓ ${handle.name}`;
-                                        s.className =
-                                            "anki-status loaded";
-                                    }
+                                    _installerUpdateNextButton();
                                 } catch (e) {
-                                    if (e.name !== "AbortError") {
-                                        const s = document.getElementById(
-                                            "instMediaStatus",
-                                        );
-                                        if (s)
-                                            s.textContent =
-                                                "Folder pick failed: " +
-                                                e.message;
-                                    }
+                                    if (e.name !== "AbortError")
+                                        _setMediaStatus("Folder pick failed: " + e.message);
                                 }
                             });
                         }
+
+                        // ── Zip upload ──
                         const zi = document.getElementById("instMediaZip");
                         if (zi) {
                             zi.addEventListener("change", async (e) => {
                                 const f = e.target.files[0];
                                 if (!f) return;
+                                zi.disabled = true;
+                                _setMediaStatus(`Reading ${f.name} (${Math.round(f.size/1024/1024)} MB)…`);
                                 const buf = await f.arrayBuffer();
                                 await loadMediaFromZip(buf, f.name);
+                                zi.disabled = false;
                                 e.target.value = "";
+                                _installerUpdateNextButton();
                             });
+                        }
+
+                        // ── Direct file picker ──
+                        const instFilesBtn = document.getElementById("instMediaFilesBtn");
+                        const instFilesInput = document.getElementById("instMediaFiles");
+                        if (instFilesBtn && instFilesInput) {
+                            instFilesBtn.onclick = () => instFilesInput.click();
+                            instFilesInput.onchange = (ev) => {
+                                // Proxy through the settings-panel file picker handler
+                                // by dispatching the same event to the shared input.
+                                // Since there's no shared hidden input here, we reuse
+                                // the same logic directly.
+                                const settingsInput = document.getElementById("mediaFilesUpload");
+                                if (settingsInput) {
+                                    // Build a synthetic FileList and dispatch
+                                    const dt = new DataTransfer();
+                                    for (const f of ev.target.files) dt.items.add(f);
+                                    settingsInput.files = dt.files;
+                                    settingsInput.dispatchEvent(new Event("change"));
+                                } else {
+                                    // Fallback: run the same logic inline
+                                    const files = Array.from(ev.target.files);
+                                    const neededFiles = new Set();
+                                    for (const map of [ankiImages, ankiImages2]) {
+                                        for (const entry of Object.values(map)) {
+                                            if (entry.personSrc) neededFiles.add(entry.personSrc);
+                                            if (entry.objectSrc) neededFiles.add(entry.objectSrc);
+                                        }
+                                    }
+                                    Object.values(mediaFileMap).forEach(u => { try { URL.revokeObjectURL(u); } catch(e) {} });
+                                    mediaFileMap = {};
+                                    const accepted = [];
+                                    for (const file of files) {
+                                        const lower = file.name.toLowerCase();
+                                        if (!lower.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) continue;
+                                        if (neededFiles.size > 0 && !neededFiles.has(file.name)) continue;
+                                        mediaFileMap[file.name] = URL.createObjectURL(file);
+                                        accepted.push(file);
+                                    }
+                                    const count = accepted.length;
+                                    const neededTotal = neededFiles.size;
+                                    const countStr = neededTotal > 0 ? `${count} / ${neededTotal}` : `${count}`;
+                                    mediaFolderName = countStr + " images";
+                                    saveSettings();
+                                    _setMediaStatus(`✓ ${countStr} image${count === 1 ? "" : "s"} loaded`, true);
+                                    _checkMediaMatches();
+                                    if (accepted.length > 0) {
+                                        Promise.all(accepted.map(f => f.arrayBuffer().then(b => [f.name, new Uint8Array(b)])))
+                                            .then(pairs => saveExtractedBlobs(Object.fromEntries(pairs), mediaFolderName))
+                                            .catch(e => console.warn("Could not persist blobs:", e));
+                                    }
+                                }
+                                ev.target.value = "";
+                                _installerUpdateNextButton();
+                            };
                         }
                     }, 0);
                 }
@@ -7273,18 +7433,58 @@
                     const link = document.createElement("p");
                     link.style.cssText =
                         "font-size:0.85rem;color:var(--modal-text-muted);margin:4px 0 8px;";
-                    link.innerHTML = `Requires a free <a href="https://console.firebase.google.com" target="_blank" rel="noopener" style="color:var(--accent)">Firebase project</a>. Paste your config below.`;
+                    link.innerHTML = `Requires a free <a href="https://console.firebase.google.com" target="_blank" rel="noopener" style="color:var(--accent)">Firebase project</a>. Paste your config object below, then click Connect.`;
                     body.appendChild(link);
+
                     const ta = document.createElement("textarea");
                     ta.id = "instFirebaseConfig";
                     ta.placeholder =
                         '{"apiKey":"...","authDomain":"...","projectId":"...",...}';
                     ta.style.cssText =
-                        "width:100%;min-height:90px;font-family:monospace;font-size:0.8rem;padding:6px;background:var(--modal-input-bg);color:var(--modal-text-color);border:1px solid var(--modal-border);border-radius:4px;";
-                    const existing =
-                        document.getElementById("firebaseConfigInput");
-                    if (existing && existing.value) ta.value = existing.value;
+                        "width:100%;min-height:90px;font-family:monospace;font-size:0.8rem;padding:6px;background:var(--modal-input-bg);color:var(--modal-text-color);border:1px solid var(--modal-border);border-radius:4px;box-sizing:border-box;resize:vertical;";
+                    const existing = document.getElementById("firebaseConfigInput");
+                    if (existing && existing.value) {
+                        ta.value = existing.value;
+                        _fbValidateBorder(ta);
+                    }
                     body.appendChild(ta);
+
+                    // Connect button + status (status shares .js-firebase-status so
+                    // _fbStatus() in the shared code updates it automatically).
+                    const row = document.createElement("div");
+                    row.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;";
+                    const connectBtn = document.createElement("button");
+                    connectBtn.type = "button";
+                    connectBtn.className = "settings-btn";
+                    connectBtn.textContent = "Connect";
+                    const statusSpan = document.createElement("span");
+                    statusSpan.className = "js-firebase-status";
+                    statusSpan.style.cssText = "font-size:0.82rem;color:#888;";
+                    // Show current connection state
+                    const realStatus = document.getElementById("firebaseStatus");
+                    if (realStatus) {
+                        statusSpan.textContent = realStatus.textContent;
+                        statusSpan.style.color = realStatus.style.color || "#888";
+                    }
+                    row.appendChild(connectBtn);
+                    row.appendChild(statusSpan);
+                    body.appendChild(row);
+
+                    setTimeout(() => {
+                        const instTa = document.getElementById("instFirebaseConfig");
+                        if (instTa) {
+                            instTa.addEventListener("input", () => _fbValidateBorder(instTa));
+                        }
+                        connectBtn.addEventListener("click", () => {
+                            if (!instTa) return;
+                            const cfg = instTa.value.trim();
+                            if (!cfg) { _fbStatus("Paste your Firebase config first", "#e05252"); return; }
+                            // Mirror to the real settings input first
+                            const real = document.getElementById("firebaseConfigInput");
+                            if (real) { real.value = cfg; real.dispatchEvent(new Event("input")); }
+                            _fbConnect(cfg);
+                        });
+                    }, 0);
                 }
                 function _saveInstallerCloudSync() {
                     const ta = document.getElementById("instFirebaseConfig");

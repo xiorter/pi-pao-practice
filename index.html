@@ -608,17 +608,40 @@
                                 >Media folder path (relative to this
                                 page):</label
                             >
-                            <input
-                                type="text"
-                                id="ankiMediaPathInput"
-                                placeholder="media"
-                                style="width: 100%; margin-top: 4px"
-                            />
+                            <div
+                                style="
+                                    display: flex;
+                                    gap: 6px;
+                                    align-items: center;
+                                    width: 100%;
+                                    margin-top: 4px;
+                                "
+                            >
+                                <input
+                                    type="text"
+                                    id="ankiMediaPathInput"
+                                    placeholder="media"
+                                    style="flex: 1"
+                                />
+                                <button
+                                    type="button"
+                                    id="ankiMediaPathTestBtn"
+                                    class="settings-btn"
+                                    style="white-space: nowrap"
+                                >
+                                    Test path
+                                </button>
+                            </div>
                             <small style="color: #888"
                                 >e.g. <code>media</code> if images are in a
                                 <code>media/</code> subfolder next to
                                 index.html</small
                             >
+                            <div
+                                id="ankiMediaPathTestStatus"
+                                class="anki-status"
+                                style="display: none"
+                            ></div>
                         </div>
                         <div
                             class="setting-row"
@@ -657,9 +680,26 @@
                                     style="display: none"
                                 />
                             </div>
-                            <div id="mediaFolderStatus" class="anki-status">
+                            <div
+                                id="mediaFolderStatus"
+                                class="anki-status js-media-status"
+                            >
                                 No media selected.
                             </div>
+                            <div
+                                class="js-media-match-warning"
+                                style="
+                                    display: none;
+                                    font-size: 0.8rem;
+                                    color: #b45309;
+                                    background: rgba(251, 191, 36, 0.12);
+                                    border: 1px solid #f59e0b;
+                                    border-radius: 4px;
+                                    padding: 6px 8px;
+                                    margin-top: 2px;
+                                    line-height: 1.5;
+                                "
+                            ></div>
                         </div>
                     </fieldset>
 
