@@ -265,9 +265,9 @@
                     return {
                         person2: ok(pHas2, p, req2, 2),
                         person3: ok(pHas3, p, req3, 3),
-                        action: aHas2
-                            ? validate(a, req2, 2)
-                            : { ok: true },
+                        // Return null (pristine) when action is empty — returning
+                        // { ok: true } caused a false blue border on fresh install.
+                        action: aHas2 ? validate(a, req2, 2) : null,
                         object2: ok(oHas2, o, req2, 2),
                         object3: ok(oHas3, o, req3, 3),
                         has2: pHas2 || oHas2 || aHas2,
@@ -707,6 +707,9 @@
                         document.getElementById(
                             "firebaseSyncSection",
                         ).style.display = "block";
+                        // Enable Done button on the cloud sync step
+                        if (typeof _installerUpdateNextButton === "function")
+                            _installerUpdateNextButton();
                         // Auto-pull on connect
                         _fbPull();
                         return true;
@@ -1427,17 +1430,19 @@
                             if (mediaFolderName) {
                                 const mapSize =
                                     Object.keys(mediaFileMap).length;
-                                mfStatus.textContent =
-                                    mapSize > 0
-                                        ? `✓ ${mediaFolderName} (${mapSize} files)`
-                                        : `⚠ ${mediaFolderName} — reload page to reconnect`;
-                                mfStatus.className =
-                                    mapSize > 0
-                                        ? "anki-status loaded"
-                                        : "anki-status";
+                                if (mapSize > 0) {
+                                    mfStatus.textContent = `✓ ${mediaFolderName} (${mapSize} files)`;
+                                    mfStatus.className = "anki-status loaded js-media-status";
+                                } else {
+                                    // Blobs may still be restoring from IDB;
+                                    // show a neutral placeholder that
+                                    // _setMediaStatus will overwrite.
+                                    mfStatus.textContent = `Loading ${mediaFolderName}…`;
+                                    mfStatus.className = "anki-status js-media-status";
+                                }
                             } else {
                                 mfStatus.textContent = "No media selected.";
-                                mfStatus.className = "anki-status";
+                                mfStatus.className = "anki-status js-media-status";
                             }
                         }
                         if (volSlider)
@@ -5461,8 +5466,10 @@
                                 document.getElementById("ankiLoadStatus");
                             statusEl.textContent = `✓ ${count} entries loaded`;
                             statusEl.className = "anki-status loaded";
+                            // Mirror into the installer if it's open
+                            const instEl = document.getElementById("instAnkiStatus1");
+                            if (instEl) { instEl.textContent = statusEl.textContent; instEl.className = statusEl.className; }
                             alert(`Loaded ${count} Millennium PAO entries!`);
-                            _checkMediaMatches();
                             _installerUpdateNextButton();
                         };
                         reader.readAsText(f);
@@ -5485,8 +5492,10 @@
                                 document.getElementById("ankiLoadStatus2");
                             statusEl2.textContent = `✓ ${count} entries loaded`;
                             statusEl2.className = "anki-status loaded";
+                            // Mirror into the installer if it's open
+                            const instEl2 = document.getElementById("instAnkiStatus2");
+                            if (instEl2) { instEl2.textContent = statusEl2.textContent; instEl2.className = statusEl2.className; }
                             alert(`Loaded ${count} Century PAO entries!`);
-                            _checkMediaMatches();
                             _installerUpdateNextButton();
                         };
                         reader.readAsText(f);
@@ -5549,7 +5558,6 @@
                         mediaFolderName = dirHandle.name;
                         saveSettings();
                         _setMediaStatus(`✓ ${dirHandle.name} (${count} files)`, true);
-                        _checkMediaMatches();
                         return count;
                     }
 
@@ -5654,56 +5662,6 @@
                         document.querySelectorAll(".js-media-status").forEach(el => {
                             el.textContent = text;
                             el.className = "anki-status js-media-status" + (loaded ? " loaded" : "");
-                        });
-                    }
-
-                    // Checks whether all images referenced by loaded .txt exports
-                    // are present in mediaFileMap. Updates all .js-media-match-warning
-                    // elements with a yellow warning listing missing term names/files.
-                    function _checkMediaMatches() {
-                        const hasTxt =
-                            Object.keys(ankiImages).length > 0 ||
-                            Object.keys(ankiImages2).length > 0;
-                        const hasMedia = Object.keys(mediaFileMap).length > 0;
-                        const warn = document.querySelectorAll(".js-media-match-warning");
-                        if (!hasTxt || !hasMedia) {
-                            warn.forEach(el => { el.style.display = "none"; el.innerHTML = ""; });
-                            return;
-                        }
-                        // Collect unique missing items by filename, tracking
-                        // the best human-readable label (term name) for each.
-                        const missingMap = new Map(); // filename → label
-                        for (const [map, kind] of [[ankiImages, "Mill"], [ankiImages2, "Cent"]]) {
-                            const seen = new Set();
-                            for (const [key, entry] of Object.entries(map)) {
-                                // ankiImages stores each entry 3× (raw/padded).
-                                // Deduplicate by personSrc+objectSrc pair.
-                                const sig = (entry.personSrc || "") + "|" + (entry.objectSrc || "");
-                                if (seen.has(sig)) continue;
-                                seen.add(sig);
-                                if (entry.personSrc && !mediaFileMap[entry.personSrc]) {
-                                    if (!missingMap.has(entry.personSrc))
-                                        missingMap.set(entry.personSrc, `${entry.personName || key} (${kind} person)`);
-                                }
-                                if (entry.objectSrc && !mediaFileMap[entry.objectSrc]) {
-                                    if (!missingMap.has(entry.objectSrc))
-                                        missingMap.set(entry.objectSrc, `${entry.objectName || key} (${kind} object)`);
-                                }
-                            }
-                        }
-                        warn.forEach(el => {
-                            if (missingMap.size === 0) {
-                                el.style.display = "none";
-                                el.innerHTML = "";
-                                return;
-                            }
-                            const items = Array.from(missingMap.entries());
-                            const preview = items.slice(0, 25).map(([f, label]) =>
-                                `<span style="opacity:0.7">${label}:</span> ${f}`
-                            ).join("<br>");
-                            const more = items.length > 25 ? `<br><em>…and ${items.length - 25} more</em>` : "";
-                            el.style.display = "block";
-                            el.innerHTML = `⚠ ${missingMap.size} image${missingMap.size === 1 ? "" : "s"} not found in loaded media:<br><code style="font-size:0.74rem;line-height:1.6">${preview}${more}</code>`;
                         });
                     }
 
@@ -5820,7 +5778,6 @@
                                     ? `${count} / ${neededTotal}`
                                     : `${count}`;
                                 _setMediaStatus(`✓ ${filename} (${countStr} images)`, true);
-                                _checkMediaMatches();
                                 resolve(count);
                             });
                         });
@@ -5928,7 +5885,6 @@
                                 mediaFolderName = countStr + " images";
                                 saveSettings();
                                 _setMediaStatus(`✓ ${countStr} image${count === 1 ? "" : "s"} loaded`, true);
-                                _checkMediaMatches();
 
                                 // Read ArrayBuffers for IDB persistence in parallel
                                 // in the background — don't block the UI.
@@ -5952,27 +5908,26 @@
 
                     // Restore media on load: try folder handle first, then stored blobs
                     async function restoreMedia() {
-                        // 1) Folder handle (Chrome/Edge only)
-                        try {
-                            if ("showDirectoryPicker" in window) {
+                        let hadFolderHandle = false;
+                        // 1) Folder handle (Chrome/Edge only) — only use when
+                        //    permission is already granted without a user gesture.
+                        if ("showDirectoryPicker" in window) {
+                            try {
                                 const h = await loadDirHandle();
                                 if (h) {
-                                    const perm = await h.queryPermission({
-                                        mode: "read",
-                                    });
+                                    hadFolderHandle = true;
+                                    const perm = await h.queryPermission({ mode: "read" });
                                     if (perm === "granted") {
                                         await loadMediaFromHandle(h);
                                         return;
                                     }
-                                    // Permission not granted — show a hint
-                                    _setMediaStatus(
-                                        `⚠ ${mediaFolderName || "folder"} — click "Choose media folder" to reconnect`,
-                                    );
-                                    return;
+                                    // Permission "prompt"/"denied" — fall through
+                                    // to blob restore; don't show reconnect warning
+                                    // if blobs are available.
                                 }
+                            } catch (e) {
+                                console.warn("Folder restore failed:", e);
                             }
-                        } catch (e) {
-                            console.warn("Folder restore failed:", e);
                         }
                         // 2) Stored blobs — restores without re-extracting the zip
                         try {
@@ -5980,7 +5935,16 @@
                             const keys = Object.keys(stored).filter(
                                 (k) => k !== "_sourceName",
                             );
-                            if (keys.length === 0) return;
+                            if (keys.length === 0) {
+                                if (hadFolderHandle) {
+                                    _setMediaStatus(
+                                        `⚠ ${mediaFolderName || "folder"} — click "Choose media folder" to reconnect`,
+                                    );
+                                } else {
+                                    _setMediaStatus("No media selected.");
+                                }
+                                return;
+                            }
                             Object.values(mediaFileMap).forEach((u) => {
                                 try { URL.revokeObjectURL(u); } catch (e) {}
                             });
@@ -6010,7 +5974,6 @@
                                 `✓ ${mediaFolderName} (${keys.length} images)`,
                                 true,
                             );
-                            _checkMediaMatches();
                         } catch (e) {
                             console.warn("Blob restore failed:", e);
                         }
@@ -6756,7 +6719,10 @@
                     if (!nextBtn) return;
                     const step = _INSTALLER_STEPS[_installerStep];
                     let canProceed = true;
-                    if (step === "ankiImages") {
+                    if (step === "cloudSync") {
+                        // Done is disabled until Firebase is actually connected.
+                        canProceed = _fbDb !== null;
+                    } else if (step === "ankiImages") {
                         const hasTxt =
                             Object.keys(ankiImages).length > 0 ||
                             Object.keys(ankiImages2).length > 0;
@@ -6777,18 +6743,16 @@
                                 actionList,
                                 objectList,
                             );
-                            // Each present key set (2-digit / 3-digit)
-                            // must be valid for Next to be enabled.
-                            const sets = [
-                                r.person2,
-                                r.person3,
-                                r.action,
-                                r.object2,
-                                r.object3,
-                            ];
-                            canProceed = sets
-                                .filter((s) => s !== null)
-                                .every((s) => s.ok);
+                            // Require at least one person set, the action set,
+                            // and at least one object set — all valid.
+                            // Vacuous truth (everything null) → not ready.
+                            const hasPerson = r.person2 !== null || r.person3 !== null;
+                            const hasAction = r.action !== null;
+                            const hasObject = r.object2 !== null || r.object3 !== null;
+                            const allNonNullOk = [r.person2, r.person3, r.action, r.object2, r.object3]
+                                .filter(s => s !== null)
+                                .every(s => s.ok);
+                            canProceed = hasPerson && hasAction && hasObject && allNonNullOk;
                         }
                     }
                     nextBtn.disabled = !canProceed;
@@ -6984,10 +6948,35 @@
                     const excelSection = document.createElement("div");
                     excelSection.id = "instExcelSection";
                     excelSection.style.cssText =
-                        "display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
-                    excelSection.innerHTML = `<label style="font-weight:bold">Upload Excel:</label>
-                        <input type="file" id="instExcelUpload" accept=".xlsx,.xls">
-                        <span id="instExcelStatus" class="anki-status" style="text-align:left;"></span>`;
+                        "display:flex;gap:8px;align-items:flex-start;flex-direction:column;flex-wrap:wrap;";
+                    excelSection.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <label style="font-weight:bold">Upload Excel:</label>
+                            <input type="file" id="instExcelUpload" accept=".xlsx,.xls">
+                            <span id="instExcelStatus" class="anki-status" style="text-align:left;"></span>
+                        </div>
+                        <details style="margin-top:4px;font-size:0.85rem;color:var(--modal-text-muted);">
+                            <summary style="cursor:pointer;user-select:none;">Column assignment</summary>
+                            <table style="margin-top:6px;border-collapse:collapse;font-size:0.82rem;">
+                                <tr><td style="padding:3px 8px 3px 0">Row number</td>
+                                    <td><input type="text" id="instExcelNumCol" class="short-input" style="width:44px" value="${excelColumnConfig.numCol}"></td>
+                                    <td style="padding:3px 0 3px 8px;color:#aaa">both modes</td></tr>
+                                <tr><td style="padding:3px 8px 3px 0">Person (3-digit)</td>
+                                    <td><input type="text" id="instExcelPerson3Col" class="short-input" style="width:44px" value="${excelColumnConfig.person3Col}"></td>
+                                    <td style="padding:3px 0 3px 8px;color:#aaa">3-2-3 mode</td></tr>
+                                <tr><td style="padding:3px 8px 3px 0">Action (2-digit)</td>
+                                    <td><input type="text" id="instExcelAction2Col" class="short-input" style="width:44px" value="${excelColumnConfig.action2Col}"></td>
+                                    <td style="padding:3px 0 3px 8px;color:#aaa">both modes</td></tr>
+                                <tr><td style="padding:3px 8px 3px 0">Object (3-digit)</td>
+                                    <td><input type="text" id="instExcelObject3Col" class="short-input" style="width:44px" value="${excelColumnConfig.object3Col}"></td>
+                                    <td style="padding:3px 0 3px 8px;color:#aaa">3-2-3 mode</td></tr>
+                                <tr><td style="padding:3px 8px 3px 0">Person (2-digit)</td>
+                                    <td><input type="text" id="instExcelPerson2Col" class="short-input" style="width:44px" value="${excelColumnConfig.person2Col}"></td>
+                                    <td style="padding:3px 0 3px 8px;color:#aaa">2-2-2 mode</td></tr>
+                                <tr><td style="padding:3px 8px 3px 0">Object (2-digit)</td>
+                                    <td><input type="text" id="instExcelObject2Col" class="short-input" style="width:44px" value="${excelColumnConfig.object2Col}"></td>
+                                    <td style="padding:3px 0 3px 8px;color:#aaa">2-2-2 mode</td></tr>
+                            </table>
+                        </details>`;
                     body.appendChild(excelSection);
 
                     // Textarea section (shown only when Textarea is selected)
@@ -7117,6 +7106,28 @@
                                         );
                                 }
                             });
+                        }
+                        // Wire installer excel column inputs → excelColumnConfig
+                        const colMap = {
+                            instExcelNumCol: "numCol",
+                            instExcelPerson3Col: "person3Col",
+                            instExcelAction2Col: "action2Col",
+                            instExcelObject3Col: "object3Col",
+                            instExcelPerson2Col: "person2Col",
+                            instExcelObject2Col: "object2Col",
+                        };
+                        for (const [id, key] of Object.entries(colMap)) {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.addEventListener("input", () => {
+                                    excelColumnConfig[key] = el.value.trim().toUpperCase() || excelColumnConfig[key];
+                                    // Sync to the real settings input
+                                    const settingsId = id.replace("instExcel", "excel");
+                                    const real = document.getElementById(settingsId);
+                                    if (real) real.value = el.value;
+                                    saveSettings();
+                                });
+                            }
                         }
                         update();
                     }, 0);
@@ -7277,10 +7288,10 @@
                     upWrap.innerHTML = `
                         <label style="font-weight:bold">Millennium PAO — 3-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt1" accept=".txt">
-                        <div id="instAnkiStatus1" class="anki-status">${Object.keys(ankiImages).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages).length/3)} entries loaded` : "No file loaded."}</div>
+                        <div id="instAnkiStatus1" class="anki-status${Object.keys(ankiImages).length > 0 ? ' loaded' : ''}">${Object.keys(ankiImages).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages).length/3)} entries loaded` : "No file loaded."}</div>
                         <label style="font-weight:bold">Century PAO — 2-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt2" accept=".txt">
-                        <div id="instAnkiStatus2" class="anki-status">${Object.keys(ankiImages2).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages2).length/3)} entries loaded` : "No file loaded."}</div>`;
+                        <div id="instAnkiStatus2" class="anki-status${Object.keys(ankiImages2).length > 0 ? ' loaded' : ''}">${Object.keys(ankiImages2).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages2).length/3)} entries loaded` : "No file loaded."}</div>`;
                     body.appendChild(upWrap);
 
                     // Media loaders — same set of buttons as Settings → Anki Images.
@@ -7300,13 +7311,12 @@
                             <button type="button" id="instMediaFilesBtn" class="settings-btn">Select image files…</button>
                             <input type="file" id="instMediaFiles" multiple accept="image/*" style="display:none">
                         </div>
-                        <div id="instMediaStatus" class="anki-status js-media-status" style="text-align:left;">No media selected.</div>
-                        <div class="js-media-match-warning" style="display:none;font-size:0.8rem;color:#b45309;background:rgba(251,191,36,0.12);border:1px solid #f59e0b;border-radius:4px;padding:6px 8px;margin-top:2px;line-height:1.5;"></div>`;
+                        <div id="instMediaStatus" class="anki-status js-media-status${Object.keys(mediaFileMap).length > 0 ? ' loaded' : ''}" style="text-align:left;">${(()=>{const n=Object.keys(mediaFileMap).length;return n>0?`✓ ${mediaFolderName||n+' files'} (${n} images)`:'No media selected.';})()}</div>`;
                     body.appendChild(media);
 
                     setTimeout(() => {
                         // ── Txt proxies ──
-                        const proxyTxt = (instId, realId, statusId) => {
+                        const proxyTxt = (instId, realId) => {
                             const inst = document.getElementById(instId);
                             if (!inst) return;
                             inst.addEventListener("change", (e) => {
@@ -7317,22 +7327,13 @@
                                     real.files = dt.files;
                                     real.dispatchEvent(new Event("change"));
                                 }
-                                // Mirror status into the installer's own status div
-                                const instStatus = document.getElementById(statusId);
-                                if (instStatus) {
-                                    const realStatus = document.getElementById(
-                                        realId === "ankiTxtUpload" ? "ankiLoadStatus" : "ankiLoadStatus2"
-                                    );
-                                    if (realStatus) {
-                                        instStatus.textContent = realStatus.textContent;
-                                        instStatus.className = realStatus.className;
-                                    }
-                                }
+                                // Status update happens inside reader.onload (async),
+                                // so we don't mirror here — the txt handlers do it.
                                 _installerUpdateNextButton();
                             });
                         };
-                        proxyTxt("instAnkiTxt1", "ankiTxtUpload", "instAnkiStatus1");
-                        proxyTxt("instAnkiTxt2", "ankiTxtUpload2", "instAnkiStatus2");
+                        proxyTxt("instAnkiTxt1", "ankiTxtUpload");
+                        proxyTxt("instAnkiTxt2", "ankiTxtUpload2");
 
                         // ── Folder picker ──
                         const fb = document.getElementById("instMediaFolderBtn");
@@ -7409,7 +7410,6 @@
                                     mediaFolderName = countStr + " images";
                                     saveSettings();
                                     _setMediaStatus(`✓ ${countStr} image${count === 1 ? "" : "s"} loaded`, true);
-                                    _checkMediaMatches();
                                     if (accepted.length > 0) {
                                         Promise.all(accepted.map(f => f.arrayBuffer().then(b => [f.name, new Uint8Array(b)])))
                                             .then(pairs => saveExtractedBlobs(Object.fromEntries(pairs), mediaFolderName))
