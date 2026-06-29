@@ -2474,12 +2474,13 @@
                     const numStr = num.toString();
                     const num2 = numStr.padStart(2, "0");
                     const num3 = numStr.padStart(3, "0");
-                    // 2-digit key → prefer Century PAO (ankiImages2)
+                    // 2-digit key → Century PAO only. Never fall through to
+                    // millennium (ankiImages) — that would show 014's image
+                    // for position 14 when only the millennium txt is loaded.
                     if (numStr.length <= 2) {
-                        const e2 = ankiImages2[num2] || ankiImages2[numStr];
-                        if (e2) return e2;
+                        return ankiImages2[num2] || ankiImages2[numStr] || null;
                     }
-                    // 3-digit key → Millennium PAO
+                    // 3-digit key → Millennium PAO only.
                     return ankiImages[num3] || ankiImages[numStr] || null;
                 }
 
@@ -5557,7 +5558,7 @@
                         }
                         mediaFolderName = dirHandle.name;
                         saveSettings();
-                        _setMediaStatus(`✓ ${dirHandle.name} (${count} files)`, true);
+                        _setMediaStatus("✓ Media loaded.", true);
                         return count;
                     }
 
@@ -5773,11 +5774,7 @@
                                     );
                                 }
                                 saveSettings();
-                                const neededTotal = neededFiles.size;
-                                const countStr = neededTotal > 0
-                                    ? `${count} / ${neededTotal}`
-                                    : `${count}`;
-                                _setMediaStatus(`✓ ${filename} (${countStr} images)`, true);
+                                _setMediaStatus("✓ Media loaded.", true);
                                 resolve(count);
                             });
                         });
@@ -5854,48 +5851,47 @@
                                 ev.target.value = "";
                                 if (!files.length) return;
 
-                                // Build neededFiles set from loaded txts
-                                const neededFiles = new Set();
-                                for (const map of [ankiImages, ankiImages2]) {
-                                    for (const entry of Object.values(map)) {
-                                        if (entry.personSrc) neededFiles.add(entry.personSrc);
-                                        if (entry.objectSrc) neededFiles.add(entry.objectSrc);
-                                    }
-                                }
-                                const neededTotal = neededFiles.size;
-
+                                // Show feedback and yield so the browser can
+                                // paint before the URL-creation loop runs.
                                 _setMediaStatus(`Reading ${files.length} file${files.length === 1 ? "" : "s"}…`);
-                                // Revoke old object URLs
-                                Object.values(mediaFileMap).forEach(u => { try { URL.revokeObjectURL(u); } catch(e) {} });
-                                mediaFileMap = {};
+                                setTimeout(() => {
+                                    // Build neededFiles set from loaded txts
+                                    const neededFiles = new Set();
+                                    for (const map of [ankiImages, ankiImages2]) {
+                                        for (const entry of Object.values(map)) {
+                                            if (entry.personSrc) neededFiles.add(entry.personSrc);
+                                            if (entry.objectSrc) neededFiles.add(entry.objectSrc);
+                                        }
+                                    }
 
-                                // Create object URLs synchronously (instant — no await needed).
-                                // This is the fast path that makes the UI feel immediate.
-                                const accepted = [];
-                                for (const file of files) {
-                                    const lower = file.name.toLowerCase();
-                                    if (!lower.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) continue;
-                                    if (neededFiles.size > 0 && !neededFiles.has(file.name)) continue;
-                                    mediaFileMap[file.name] = URL.createObjectURL(file);
-                                    accepted.push(file);
-                                }
+                                    // Revoke old object URLs
+                                    Object.values(mediaFileMap).forEach(u => { try { URL.revokeObjectURL(u); } catch(e) {} });
+                                    mediaFileMap = {};
 
-                                const count = accepted.length;
-                                const countStr = neededTotal > 0 ? `${count} / ${neededTotal}` : `${count}`;
-                                mediaFolderName = countStr + " images";
-                                saveSettings();
-                                _setMediaStatus(`✓ ${countStr} image${count === 1 ? "" : "s"} loaded`, true);
+                                    // Create object URLs synchronously (instant).
+                                    const accepted = [];
+                                    for (const file of files) {
+                                        const lower = file.name.toLowerCase();
+                                        if (!lower.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) continue;
+                                        if (neededFiles.size > 0 && !neededFiles.has(file.name)) continue;
+                                        mediaFileMap[file.name] = URL.createObjectURL(file);
+                                        accepted.push(file);
+                                    }
 
-                                // Read ArrayBuffers for IDB persistence in parallel
-                                // in the background — don't block the UI.
-                                if (accepted.length > 0) {
-                                    Promise.all(
-                                        accepted.map(f => f.arrayBuffer().then(b => [f.name, new Uint8Array(b)]))
-                                    ).then(pairs => {
-                                        const rawMap = Object.fromEntries(pairs);
-                                        return saveExtractedBlobs(rawMap, mediaFolderName);
-                                    }).catch(e => console.warn("Could not persist blobs:", e));
-                                }
+                                    mediaFolderName = "selected files";
+                                    saveSettings();
+                                    _setMediaStatus("✓ Media loaded.", true);
+
+                                    // Persist to IDB in background — don't block the UI.
+                                    if (accepted.length > 0) {
+                                        Promise.all(
+                                            accepted.map(f => f.arrayBuffer().then(b => [f.name, new Uint8Array(b)]))
+                                        ).then(pairs => {
+                                            const rawMap = Object.fromEntries(pairs);
+                                            return saveExtractedBlobs(rawMap, mediaFolderName);
+                                        }).catch(e => console.warn("Could not persist blobs:", e));
+                                    }
+                                }, 0);
                             };
 
                             zipLabel.appendChild(filesBtn);
@@ -5970,10 +5966,7 @@
                             mediaFolderName =
                                 stored._sourceName || `${keys.length} files`;
                             saveSettings();
-                            _setMediaStatus(
-                                `✓ ${mediaFolderName} (${keys.length} images)`,
-                                true,
-                            );
+                            _setMediaStatus("✓ Media loaded.", true);
                         } catch (e) {
                             console.warn("Blob restore failed:", e);
                         }
@@ -6729,31 +6722,22 @@
                         const hasMedia = Object.keys(mediaFileMap).length > 0;
                         // Next is disabled only when the user has done nothing at all.
                         // If they've uploaded at least a txt OR some media, allow Next.
-                        canProceed = hasTxt || hasMedia;
+                        canProceed = hasMedia;
                     } else if (step === "paoSource") {
-                        const sel = document.querySelector(
-                            'input[name="instPaoSource"]:checked',
+                        // Radio buttons are gone — paoDataSource is always
+                        // "textarea" in the installer. Validate the three lists.
+                        const r = _validatePaoLists(
+                            personList,
+                            actionList,
+                            objectList,
                         );
-                        const v = sel ? sel.value : paoDataSource;
-                        if (v === "excel") {
-                            canProceed = instExcelLoaded;
-                        } else if (v === "textarea") {
-                            const r = _validatePaoLists(
-                                personList,
-                                actionList,
-                                objectList,
-                            );
-                            // Require at least one person set, the action set,
-                            // and at least one object set — all valid.
-                            // Vacuous truth (everything null) → not ready.
-                            const hasPerson = r.person2 !== null || r.person3 !== null;
-                            const hasAction = r.action !== null;
-                            const hasObject = r.object2 !== null || r.object3 !== null;
-                            const allNonNullOk = [r.person2, r.person3, r.action, r.object2, r.object3]
-                                .filter(s => s !== null)
-                                .every(s => s.ok);
-                            canProceed = hasPerson && hasAction && hasObject && allNonNullOk;
-                        }
+                        const hasPerson = r.person2 !== null || r.person3 !== null;
+                        const hasAction = r.action !== null;
+                        const hasObject = r.object2 !== null || r.object3 !== null;
+                        const allNonNullOk = [r.person2, r.person3, r.action, r.object2, r.object3]
+                            .filter(s => s !== null)
+                            .every(s => s.ok);
+                        canProceed = hasPerson && hasAction && hasObject && allNonNullOk;
                     }
                     nextBtn.disabled = !canProceed;
                     nextBtn.style.opacity = canProceed ? "" : "0.5";
@@ -6915,46 +6899,25 @@
                 // Radio cards; selecting Textarea hides the Excel uploader
                 // and shows the three textareas (with live updates).
                 function renderInstallerPaoSource(body) {
-                    const wrap = document.createElement("div");
-                    wrap.style.cssText =
-                        "display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px;";
-                    const mk = (val, label, hint) => {
-                        const l = document.createElement("label");
-                        l.style.cssText =
-                            "display:flex;align-items:flex-start;gap:6px;cursor:pointer;flex:1;min-width:180px;padding:10px;border:1px solid var(--modal-border);border-radius:6px;";
-                        l.innerHTML = `<input type="radio" name="instPaoSource" value="${val}" ${
-                            paoDataSource === val ? "checked" : ""
-                        }>
-                            <span><b>${label}</b><br><small style="color:var(--modal-text-muted)">${hint}</small></span>`;
-                        return l;
-                    };
-                    wrap.appendChild(
-                        mk(
-                            "excel",
-                            "Excel (recommended)",
-                            "Upload a .xlsx with the default column layout.",
+                    body.appendChild(
+                        _installerPHtml(
+                            'Enter one entry per line as <code style="background:var(--modal-bg-subtle);padding:1px 4px;border-radius:3px;">Number - Term</code>, or import from a spreadsheet.',
                         ),
                     );
-                    wrap.appendChild(
-                        mk(
-                            "textarea",
-                            "Textarea",
-                            "Three textareas — one entry per line, e.g. 00 - Zeus.",
-                        ),
-                    );
-                    body.appendChild(wrap);
 
-                    // Excel uploader (shown only when Excel is selected)
-                    const excelSection = document.createElement("div");
+                    // ── Import from Excel (optional, populates the textareas) ──
+                    const excelSection = document.createElement("details");
                     excelSection.id = "instExcelSection";
-                    excelSection.style.cssText =
-                        "display:flex;gap:8px;align-items:flex-start;flex-direction:column;flex-wrap:wrap;";
-                    excelSection.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                            <label style="font-weight:bold">Upload Excel:</label>
-                            <input type="file" id="instExcelUpload" accept=".xlsx,.xls">
-                            <span id="instExcelStatus" class="anki-status" style="text-align:left;"></span>
+                    excelSection.style.cssText = "margin-bottom:10px;border:1px solid var(--modal-border);border-radius:6px;padding:8px 10px;";
+                    if (instExcelLoaded) excelSection.open = true;
+                    excelSection.innerHTML = `
+                        <summary style="cursor:pointer;user-select:none;font-weight:bold;">Import from Excel</summary>
+                        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <label for="instExcelUpload" class="settings-btn" style="cursor:pointer">Choose file</label>
+                            <input type="file" id="instExcelUpload" accept=".xlsx,.xls" style="display:none">
+                            <span id="instExcelStatus" class="anki-status" style="text-align:left;">${instExcelLoaded ? "✓ Excel loaded — textareas populated" : "No file selected."}</span>
                         </div>
-                        <details style="margin-top:4px;font-size:0.85rem;color:var(--modal-text-muted);">
+                        <details style="margin-top:8px;font-size:0.85rem;color:var(--modal-text-muted);">
                             <summary style="cursor:pointer;user-select:none;">Column assignment</summary>
                             <table style="margin-top:6px;border-collapse:collapse;font-size:0.82rem;">
                                 <tr><td style="padding:3px 8px 3px 0">Row number</td>
@@ -6979,92 +6942,43 @@
                         </details>`;
                     body.appendChild(excelSection);
 
-                    // Textarea section (shown only when Textarea is selected)
-                    const taSection = document.createElement("div");
-                    taSection.id = "instTextareaSection";
-                    taSection.style.cssText = "display:none;";
-                    taSection.appendChild(
-                        _installerPHtml(
-                            'Format: one entry per line as <code style="background:var(--modal-bg-subtle);padding:1px 4px;border-radius:3px;">Number - Term</code>. Lines starting with <code style="background:var(--modal-bg-subtle);padding:1px 4px;border-radius:3px;">#</code> are ignored.',
-                        ),
-                    );
+                    // ── Textareas (always visible) ──
                     const tPerson = document.createElement("textarea");
                     tPerson.id = "instPersonList";
                     tPerson.placeholder = "Person (Num - Name)";
-                    tPerson.style.cssText =
-                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
+                    tPerson.style.cssText = "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
                     tPerson.value = formatPaoList(personList);
-                    taSection.appendChild(tPerson);
+                    body.appendChild(tPerson);
 
                     const tAction = document.createElement("textarea");
                     tAction.id = "instActionList";
                     tAction.placeholder = "Action (Num - Action)";
-                    tAction.style.cssText =
-                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
+                    tAction.style.cssText = "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;margin-bottom:4px;";
                     tAction.value = formatPaoList(actionList);
-                    taSection.appendChild(tAction);
+                    body.appendChild(tAction);
 
                     const tObject = document.createElement("textarea");
                     tObject.id = "instObjectList";
                     tObject.placeholder = "Object (Num - Object)";
-                    tObject.style.cssText =
-                        "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;";
+                    tObject.style.cssText = "width:100%;min-height:60px;font-family:monospace;font-size:0.85rem;";
                     tObject.value = formatPaoList(objectList);
-                    taSection.appendChild(tObject);
+                    body.appendChild(tObject);
 
-                    // Consolidated validation summary (shown only when invalid)
                     const instSummary = document.createElement("div");
                     instSummary.id = "instPaoTextareaValidationSummary";
                     instSummary.className = "inst-validation-summary";
-                    taSection.appendChild(instSummary);
-                    body.appendChild(taSection);
+                    body.appendChild(instSummary);
 
-                    // Show an Excel status note if a file is already loaded
-                    const exStatus = document.getElementById("instExcelStatus");
-                    if (exStatus) {
-                        if (instExcelLoaded) {
-                            exStatus.textContent = "✓ Excel loaded";
-                            exStatus.className = "anki-status loaded";
-                        } else {
-                            exStatus.textContent = "No file selected.";
-                            exStatus.className = "anki-status";
-                        }
-                    }
+                    // Ensure paoDataSource is textarea — data always lives in textareas now.
+                    paoDataSource = "textarea";
 
-                    // Initial visibility + onchange + validation
-                    const update = () => {
-                        const sel = document.querySelector(
-                            'input[name="instPaoSource"]:checked',
-                        );
-                        const v = sel ? sel.value : paoDataSource;
-                        excelSection.style.display = v === "excel" ? "" : "none";
-                        taSection.style.display = v === "textarea" ? "" : "none";
-                        // If we're showing the textareas, sync them from
-                        // the Excel maps (in case the user uploaded an
-                        // Excel file before switching) and apply validation
-                        // so the green/red borders reflect the current data.
-                        if (v === "textarea") {
-                            if (instExcelLoaded) {
-                                _syncInstallerTextareasFromExcel();
-                            }
-                            _updateInstallerPaoValidation();
-                        }
-                        // Update the Next button state for this step
-                        _installerUpdateNextButton();
-                    };
                     setTimeout(() => {
-                        document
-                            .querySelectorAll('input[name="instPaoSource"]')
-                            .forEach((r) =>
-                                r.addEventListener("change", update),
-                            );
-                        // Live textareas: parse + validate on each input
+                        // Live validation on textarea input
                         const onTaInput = (id, setter) => {
                             const el = document.getElementById(id);
                             if (!el) return;
                             el.addEventListener("input", () => {
-                                const m = parsePaoList(el.value);
-                                setter(m);
+                                setter(parsePaoList(el.value));
                                 _updateInstallerPaoValidation();
                                 _installerUpdateNextButton();
                             });
@@ -7072,77 +6986,63 @@
                         onTaInput("instPersonList", (m) => (personList = m));
                         onTaInput("instActionList", (m) => (actionList = m));
                         onTaInput("instObjectList", (m) => (objectList = m));
-                        // Reuse the existing Excel handler by re-pointing the file
+
+                        // Excel upload → populate textareas
                         const ex = document.getElementById("instExcelUpload");
                         if (ex) {
                             ex.addEventListener("change", (e) => {
-                                const real = document.getElementById(
-                                    "excelFileUpload",
-                                );
+                                const real = document.getElementById("excelFileUpload");
                                 if (real) {
                                     const dt = new DataTransfer();
-                                    if (e.target.files[0])
-                                        dt.items.add(e.target.files[0]);
+                                    if (e.target.files[0]) dt.items.add(e.target.files[0]);
                                     real.files = dt.files;
                                     real.dispatchEvent(new Event("change"));
-                                    // Push parsed values back into the textareas
-                                    const tPerson =
-                                        document.getElementById("instPersonList");
-                                    const tAction =
-                                        document.getElementById("instActionList");
-                                    const tObject =
-                                        document.getElementById("instObjectList");
-                                    if (tPerson)
-                                        tPerson.value = formatPaoList(
-                                            excelPersonList,
-                                        );
-                                    if (tAction)
-                                        tAction.value = formatPaoList(
-                                            excelActionList,
-                                        );
-                                    if (tObject)
-                                        tObject.value = formatPaoList(
-                                            excelObjectList,
-                                        );
+                                    // Give the real handler time to parse, then sync textareas
+                                    setTimeout(() => {
+                                        const tp = document.getElementById("instPersonList");
+                                        const ta = document.getElementById("instActionList");
+                                        const to = document.getElementById("instObjectList");
+                                        if (tp) tp.value = formatPaoList(excelPersonList);
+                                        if (ta) ta.value = formatPaoList(excelActionList);
+                                        if (to) to.value = formatPaoList(excelObjectList);
+                                        const st = document.getElementById("instExcelStatus");
+                                        if (st) { st.textContent = "✓ Excel loaded — textareas populated"; st.className = "anki-status loaded"; }
+                                        _updateInstallerPaoValidation();
+                                        _installerUpdateNextButton();
+                                    }, 300);
                                 }
                             });
                         }
-                        // Wire installer excel column inputs → excelColumnConfig
+
+                        // Wire column inputs → excelColumnConfig
                         const colMap = {
-                            instExcelNumCol: "numCol",
-                            instExcelPerson3Col: "person3Col",
-                            instExcelAction2Col: "action2Col",
-                            instExcelObject3Col: "object3Col",
-                            instExcelPerson2Col: "person2Col",
-                            instExcelObject2Col: "object2Col",
+                            instExcelNumCol: "numCol", instExcelPerson3Col: "person3Col",
+                            instExcelAction2Col: "action2Col", instExcelObject3Col: "object3Col",
+                            instExcelPerson2Col: "person2Col", instExcelObject2Col: "object2Col",
                         };
                         for (const [id, key] of Object.entries(colMap)) {
                             const el = document.getElementById(id);
                             if (el) {
                                 el.addEventListener("input", () => {
                                     excelColumnConfig[key] = el.value.trim().toUpperCase() || excelColumnConfig[key];
-                                    // Sync to the real settings input
-                                    const settingsId = id.replace("instExcel", "excel");
-                                    const real = document.getElementById(settingsId);
+                                    const real = document.getElementById(id.replace("instExcel", "excel"));
                                     if (real) real.value = el.value;
                                     saveSettings();
                                 });
                             }
                         }
-                        update();
+
+                        _updateInstallerPaoValidation();
+                        _installerUpdateNextButton();
                     }, 0);
                 }
                 function _saveInstallerPaoSource() {
-                    const sel = document.querySelector(
-                        'input[name="instPaoSource"]:checked',
+                    // paoDataSource is always "textarea" in the installer now.
+                    paoDataSource = "textarea";
+                    const radio = document.querySelector(
+                        `input[name="paoDataSource"][value="textarea"]`,
                     );
-                    if (sel) {
-                        paoDataSource = sel.value;
-                        const radio = document.querySelector(
-                            `input[name="paoDataSource"][value="${paoDataSource}"]`,
-                        );
-                        if (radio) radio.checked = true;
-                    }
+                    if (radio) radio.checked = true;
                     // Mirror textareas into the settings textareas
                     const tPerson = document.getElementById("instPersonList");
                     const tAction = document.getElementById("instActionList");
@@ -7311,7 +7211,7 @@
                             <button type="button" id="instMediaFilesBtn" class="settings-btn">Select image files…</button>
                             <input type="file" id="instMediaFiles" multiple accept="image/*" style="display:none">
                         </div>
-                        <div id="instMediaStatus" class="anki-status js-media-status${Object.keys(mediaFileMap).length > 0 ? ' loaded' : ''}" style="text-align:left;">${(()=>{const n=Object.keys(mediaFileMap).length;return n>0?`✓ ${mediaFolderName||n+' files'} (${n} images)`:'No media selected.';})()}</div>`;
+                        <div id="instMediaStatus" class="anki-status js-media-status${Object.keys(mediaFileMap).length > 0 ? ' loaded' : ''}" style="text-align:left;">${Object.keys(mediaFileMap).length > 0 ? '✓ Media loaded.' : 'No media selected.'}</div>`;
                     body.appendChild(media);
 
                     setTimeout(() => {
