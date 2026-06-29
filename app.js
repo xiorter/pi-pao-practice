@@ -966,7 +966,14 @@
                             imgPopupImg2.src = "";
                             imgPopupImg2.style.display = "none";
                         }
-                        imgPopupLabel.textContent = label || "";
+                        if (imgPopupLabel) {
+                            imgPopupLabel.textContent = label || "";
+                            // Reset display in case showImageLogic hid it
+                            // earlier (typing-screen popup hides the label).
+                            imgPopupLabel.style.display = label
+                                ? "block"
+                                : "none";
+                        }
                         if (imgPopupDigits) {
                             imgPopupDigits.textContent = digits || "";
                             imgPopupDigits.style.display = digits
@@ -1015,7 +1022,14 @@
                             imgPopupImg2.style.display = "none";
                             imgPopup.classList.remove("dual-img");
                         }
-                        imgPopupLabel.textContent = label || "";
+                        if (imgPopupLabel) {
+                            imgPopupLabel.textContent = label || "";
+                            // Reset display in case showImageLogic hid it
+                            // earlier (typing-screen popup hides the label).
+                            imgPopupLabel.style.display = label
+                                ? "block"
+                                : "none";
+                        }
                         if (imgPopupDigits) {
                             imgPopupDigits.textContent = digits || "";
                             imgPopupDigits.style.display = digits
@@ -3071,6 +3085,11 @@
                                     popup.classList.remove("dual-img");
                                 }
                                 popupLabel.textContent = label;
+                                // Reset display in case showImageLogic hid it
+                                // earlier (typing-screen popup hides the label).
+                                popupLabel.style.display = label
+                                    ? "block"
+                                    : "none";
                                 if (popupDigits) {
                                     popupDigits.textContent = digits;
                                     popupDigits.style.display = "block";
@@ -5945,6 +5964,49 @@
                         }
                     })();
 
+                    // If Everest is currently open, re-render its images so
+                    // they pick up the freshly-restored mediaFileMap. Without
+                    // this, opening Everest immediately after page refresh
+                    // shows no images — getImgSrc returns a non-existent
+                    // path because mediaFileMap is still empty when
+                    // everestRenderImages is first called.
+                    function _refreshEverestImagesIfOpen() {
+                        const everestModalEl =
+                            document.getElementById("everestModal");
+                        if (
+                            !everestModalEl ||
+                            everestModalEl.style.display === "none" ||
+                            !everestInProgress ||
+                            everestCurrentPos < 0
+                        )
+                            return;
+                        const mode = getModeForPos(everestCurrentPos + 1);
+                        const easyImgsEl =
+                            document.getElementById("everestEasyImgs");
+                        if (
+                            easyImgsEl &&
+                            everestEasyMode &&
+                            easyImgsEl.style.display !== "none"
+                        ) {
+                            everestRenderImages(
+                                easyImgsEl,
+                                everestCurrentPos,
+                                mode,
+                            );
+                        }
+                        // If the answer has been revealed, also re-render the
+                        // shown context panel's images.
+                        const shownImgsEl =
+                            document.getElementById("everestShownImgs");
+                        if (shownImgsEl && everestAnswered) {
+                            everestRenderImages(
+                                shownImgsEl,
+                                everestCurrentPos,
+                                mode,
+                            );
+                        }
+                    }
+
                     // Restore media on load: try folder handle first, then stored blobs
                     async function restoreMedia() {
                         let hadFolderHandle = false;
@@ -5958,6 +6020,7 @@
                                     const perm = await h.queryPermission({ mode: "read" });
                                     if (perm === "granted") {
                                         await loadMediaFromHandle(h);
+                                        _refreshEverestImagesIfOpen();
                                         return;
                                     }
                                     // Permission "prompt"/"denied" — fall through
@@ -6010,6 +6073,7 @@
                                 stored._sourceName || `${keys.length} files`;
                             saveSettings();
                             _setMediaStatus("✓ Media loaded.", true);
+                            _refreshEverestImagesIfOpen();
                         } catch (e) {
                             console.warn("Blob restore failed:", e);
                         }
