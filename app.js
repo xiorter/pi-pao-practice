@@ -1264,7 +1264,6 @@
                         _sv("srsInsertionOrder", s.srsInsertionOrder);
                         _sv("srsNewReviewOrder", s.srsNewReviewOrder);
                         _sv("srsReviewSortOrder", s.srsReviewSortOrder);
-                        _sc("srsShuffleCheck", s.srsShuffle);
                         currentBackgroundColor =
                             s.backgroundColor || DEFAULT_BG_COLOR;
                         correctColor = s.correctColor || DEFAULT_CORRECT_COLOR;
@@ -1659,9 +1658,6 @@
                         srsReviewSortOrder:
                             document.getElementById("srsReviewSortOrder")
                                 ?.value || "due-random",
-                        srsShuffle:
-                            document.getElementById("srsShuffleCheck")
-                                ?.checked || false,
                         backgroundColor: currentBackgroundColor,
                         correctColor,
                         incorrectColor,
@@ -2965,17 +2961,28 @@
                         const d = getPAOGroupDataByPos(p, mode);
                         const groupNum = Math.floor(p / gs) + 1;
 
+                        // Card states:
+                        //   - no card            → not added to deck (never typed/marked)
+                        //   - learning state     → added to deck (srsAddCard or A/H/Auto-mistake
+                        //                          on a new chunk) but not yet graduated; not in
+                        //                          the review deck yet — renders empty
+                        //   - in review deck     → graduated: interval > 0 and step < 0/undefined
+                        // The first two are visually identical (empty cell) and grouped under
+                        // "Not Added" in the stats counters. The third gets a color.
+                        const cardInReviewDeck = card &&
+                            card.interval > 0 &&
+                            (card.step === undefined || card.step < 0);
+                        const cardIsLearning = card && !cardInReviewDeck;
+                        const _cellIsNotAdded = !card || cardIsLearning;
+
                         // Compute color based on mode, and count stats
                         let daysUntilDue = 0;
                         let dueDateStr = "";
-                        // Stats counters (counted in both modes, shown always)
-                        // Initialize with not-added for this cell
-                        let _cellIsNotAdded = true;
-                        if (!card) {
-                            // Not in deck → #222222
+                        if (!card || cardIsLearning) {
+                            // No card, or added but not yet in the review deck
+                            // — render empty and don't compute due stats.
                             cell.style.background = pcEmpty;
                         } else {
-                            _cellIsNotAdded = false;
                             const dueMs = new Date(card.dueDate + "T00:00:00").getTime();
                             const todayMs = new Date(today + "T00:00:00").getTime();
                             daysUntilDue = Math.round((dueMs - todayMs) / 86400000);
@@ -3016,10 +3023,14 @@
                             const label = `${d.pTerm} / ${d.aTerm} / ${d.oTerm}`;
                             const digits = `${d.pNum} / ${d.aNum} / ${d.oNum}`;
 
-                            // Build header with due date distance
+                            // Build header with due date distance.
+                            // Learning-state cards get no due-info at all
+                            // (no "NOT ADDED" and no "OVERDUE" / "DUE …").
                             let dueInfo = "";
                             if (!card) {
                                 dueInfo = " · NOT ADDED";
+                            } else if (cardIsLearning) {
+                                dueInfo = "";
                             } else if (daysUntilDue < 0) {
                                 const overdue = Math.abs(daysUntilDue);
                                 dueInfo = ` · OVERDUE ${overdue} DAY${overdue !== 1 ? "S" : ""}`;
@@ -3501,15 +3512,20 @@
                     return newCount + revCount;
                 }
 
-                // Add a position to the SRS deck (new card, due today)
+                // Add a position to the SRS deck as a new learning card.
+                // interval: 0 + step: 0 marks the card as not-yet-graduated —
+                // in pi coverage it appears as an empty cell (waiting to
+                // be reviewed), distinct from cards already in the review
+                // deck (which have interval > 0 and step < 0/undefined).
                 function srsAddCard(pos) {
                     if (srsData[pos]) return; // already exists
                     srsData[pos] = {
-                        interval: 1,
+                        interval: 0,
                         easeFactor: 2.5,
                         dueDate: srsToday(),
                         reviews: 0,
                         lapses: 0,
+                        step: 0,
                     };
                     saveSettings();
                 }
@@ -3518,7 +3534,23 @@
                 // Cards in learning (step >= 0) work like Anki: Again resets to step 0,
                 // Good advances to next step, graduating when all steps are passed.
                 // Cards in review (graduated, step === undefined/-1) use SM-2 spacing.
-                function srsRate(pos, rating) {
+                //
+                // isReviewScreen: which counter to update
+                //   true  → rating came from the SRS review screen — always count
+                //           as a review in the stats heatmap and bump the
+                //           "new cards seen today" counter.
+                //   false → rating came from a typing event and was explicitly
+                //           NOT a real review (never count).
+                //   null  → (default) auto-detect from the card's state:
+                //           count as a review only if the card was already
+                //           graduated (in the review deck) before this rating.
+                //           Typing a learning-state card or a never-marked
+                //           chunk is just practice, not a review.
+                //
+                // Returns: whether this rating incremented the daily
+                // "cards reviewed" stat. Callers store this in the undo stack
+                // so undo/redo only touch the stat when the original rating did.
+                function srsRate(pos, rating, isReviewScreen = null) {
                     let card = srsData[pos];
                     if (!card)
                         card = srsData[pos] = {
@@ -3544,26 +3576,39 @@
                         card.lapses > 0 &&
                         card.step !== undefined &&
                         card.step >= 0;
-                    const isReview =
+                    const inReviewState =
                         card.interval > 0 &&
                         (card.step === undefined || card.step < 0);
                     // Save the original due date so we can cap the new one
                     // (Anki "review ahead" behavior: never push a not-due card further out)
                     const originalDueDate = card.dueDate;
-                    const steps = isReview
+                    const steps = inReviewState
                         ? []
                         : isRelearning
                           ? rSteps
                           : lSteps;
 
-                    if (card.reviews === 0) srsNewSeenToday++;
-                    card.reviews++;
-                    // Track daily review count for the reviews heatmap
-                    const _today = srsToday();
-                    dailyReviewStats[_today] =
-                        (dailyReviewStats[_today] || 0) + 1;
+                    // Decide whether this rating counts as a "review" in the
+                    // stats heatmap. Auto-detect (null) → only if the card was
+                    // already in the review deck. The "new cards seen today"
+                    // counter only bumps for review-screen ratings.
+                    const shouldCountDaily =
+                        isReviewScreen !== null
+                            ? isReviewScreen
+                            : inReviewState;
+                    const shouldCountNew = isReviewScreen === true;
 
-                    if (isReview) {
+                    if (shouldCountNew && card.reviews === 0)
+                        srsNewSeenToday++;
+                    card.reviews++;
+                    if (shouldCountDaily) {
+                        // Track daily review count for the reviews heatmap
+                        const _today = srsToday();
+                        dailyReviewStats[_today] =
+                            (dailyReviewStats[_today] || 0) + 1;
+                    }
+
+                    if (inReviewState) {
                         // ── Graduated card: SM-2 ──
                         if (rating === 1) {
                             // Again — lapse back into relearning
@@ -3639,18 +3684,23 @@
                         }
                     }
                     // Cap: if this was a review-state card (graduated, interval > 0)
-                    // and the new due date is further out than the original,
-                    // keep the original due date. (Anki "review ahead" behavior:
-                    // reviewing a not-due card can shorten or maintain the interval,
-                    // but never increase it.)
+                    // that was NOT yet due when rated, and the new due date is
+                    // further out than the original, keep the original due date.
+                    // (Anki "review ahead" behavior: reviewing a not-due card
+                    // can shorten or maintain the interval, but never increase
+                    // it.) Overdue and due-today cards always get the new
+                    // due date — keeping the past due date would leave them
+                    // permanently overdue.
                     if (
                         card.interval > 0 &&
                         (card.step === undefined || card.step < 0) &&
-                        card.dueDate > originalDueDate
+                        card.dueDate > originalDueDate &&
+                        originalDueDate > srsToday()
                     ) {
                         card.dueDate = originalDueDate;
                     }
                     saveSettings();
+                    return shouldCountDaily;
                 }
 
                 function srsNextInterval(pos, rating) {
@@ -3917,9 +3967,6 @@
 
                 function srsGetSettings() {
                     return {
-                        shuffle:
-                            document.getElementById("srsShuffleCheck")
-                                ?.checked ?? false,
                         newPerDay:
                             parseInt(
                                 document.getElementById("srsNewPerDay")?.value,
@@ -4053,14 +4100,6 @@
                                 queue.push(limitedReviews[ri++]);
                             if (ni < limitedNew.length)
                                 queue.push(limitedNew[ni++]);
-                        }
-                    }
-
-                    // Global shuffle overrides ordering
-                    if (cfg.shuffle) {
-                        for (let i = queue.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [queue[i], queue[j]] = [queue[j], queue[i]];
                         }
                     }
 
@@ -4627,12 +4666,9 @@
                             const wasWrong =
                                 idx === 0 ? !prevCorrect_ : !nextCorrect_;
                             if (wasWrong && p >= 0 && p < PI_DIGITS.length) {
-                                mistakeUndoStack.push({
-                                    pos: p,
-                                    oldCard: srsData[p]
-                                        ? { ...srsData[p] }
-                                        : null,
-                                });
+                                const _oldCardEverest = srsData[p]
+                                    ? { ...srsData[p] }
+                                    : null;
                                 if (!srsData[p])
                                     srsData[p] = {
                                         interval: 0,
@@ -4642,7 +4678,14 @@
                                         lapses: 0,
                                         step: 0,
                                     };
-                                srsRate(p, 1); // Again
+                                const _countedAsReview = srsRate(p, 1); // Again
+                                mistakeUndoStack.push({
+                                    pos: p,
+                                    oldCard: _oldCardEverest,
+                                    countedAsReview: _countedAsReview,
+                                });
+                                if (mistakeUndoStack.length > 20)
+                                    mistakeUndoStack.shift();
                                 srsUpdateBadge();
                             }
                         });
@@ -5148,7 +5191,7 @@
                                         : null,
                                     queueSnapshot: [...srsQueue],
                                 });
-                                srsRate(pos, i + 1);
+                                srsRate(pos, i + 1, true);
                                 srsSessionDone++;
                                 srsQueueIndex++;
                                 // If rated Again or if card is still in learning (step >= 0), re-add to end of queue
@@ -6386,15 +6429,11 @@
                                         mistakePos,
                                         mistakePos + _gSize,
                                     );
-                                    mistakeUndoStack.push({
-                                        pos: mistakePos,
-                                        oldCard: srsData[mistakePos]
-                                            ? { ...srsData[mistakePos] }
-                                            : null,
-                                        digits,
-                                    });
-                                    if (mistakeUndoStack.length > 20)
-                                        mistakeUndoStack.shift();
+                                    // Snapshot the card state before rating so
+                                    // undo can restore it.
+                                    const _oldCardAgain = srsData[mistakePos]
+                                        ? { ...srsData[mistakePos] }
+                                        : null;
                                     // Ensure card exists, then rate Again
                                     if (!srsData[mistakePos]) {
                                         srsData[mistakePos] = {
@@ -6406,7 +6445,16 @@
                                             step: 0,
                                         };
                                     }
-                                    srsRate(mistakePos, 1); // Again
+                                    const _countedAsReview = srsRate(mistakePos, 1); // Again
+                                    mistakeUndoStack.push({
+                                        pos: mistakePos,
+                                        oldCard: _oldCardAgain,
+                                        digits,
+                                        rating: 1,
+                                        countedAsReview: _countedAsReview,
+                                    });
+                                    if (mistakeUndoStack.length > 20)
+                                        mistakeUndoStack.shift();
                                     currentChunkMistakePressed = true;
                                     currentChunkLastRating = 1;
                                     srsUpdateBadge();
@@ -6443,16 +6491,11 @@
                                         mistakePos,
                                         mistakePos + _gSize,
                                     );
-                                    mistakeUndoStack.push({
-                                        pos: mistakePos,
-                                        oldCard: srsData[mistakePos]
-                                            ? { ...srsData[mistakePos] }
-                                            : null,
-                                        digits,
-                                        rating: 4,
-                                    });
-                                    if (mistakeUndoStack.length > 20)
-                                        mistakeUndoStack.shift();
+                                    // Snapshot the card state before rating so
+                                    // undo can restore it.
+                                    const _oldCardHard = srsData[mistakePos]
+                                        ? { ...srsData[mistakePos] }
+                                        : null;
                                     if (!srsData[mistakePos]) {
                                         srsData[mistakePos] = {
                                             interval: 0,
@@ -6463,7 +6506,16 @@
                                             step: 0,
                                         };
                                     }
-                                    srsRate(mistakePos, 4); // Hard
+                                    const _countedAsReview = srsRate(mistakePos, 4); // Hard
+                                    mistakeUndoStack.push({
+                                        pos: mistakePos,
+                                        oldCard: _oldCardHard,
+                                        digits,
+                                        rating: 4,
+                                        countedAsReview: _countedAsReview,
+                                    });
+                                    if (mistakeUndoStack.length > 20)
+                                        mistakeUndoStack.shift();
                                     currentChunkMistakePressed = true;
                                     currentChunkLastRating = 4;
                                     srsUpdateBadge();
@@ -6490,6 +6542,8 @@
                                                 : null,
                                             rating: undo.rating,
                                             digits: undo.digits,
+                                            countedAsReview:
+                                                undo.countedAsReview,
                                         });
                                         if (mistakeRedoStack.length > 20)
                                             mistakeRedoStack.shift();
@@ -6498,9 +6552,14 @@
                                             srsData[undo.pos] = undo.oldCard;
                                         else delete srsData[undo.pos];
                                         // Undo the review stat increment
-                                        const _today = srsToday();
-                                        if (dailyReviewStats[_today] > 0)
-                                            dailyReviewStats[_today]--;
+                                        // only if the original rating counted
+                                        // as a review (i.e. the card was in the
+                                        // review deck at the time).
+                                        if (undo.countedAsReview) {
+                                            const _today = srsToday();
+                                            if (dailyReviewStats[_today] > 0)
+                                                dailyReviewStats[_today]--;
+                                        }
                                         srsUpdateBadge();
                                         saveSettings();
                                         const d = undo.digits || "chunk";
@@ -6530,13 +6589,17 @@
                                             redo.pos,
                                             redo.pos + _gSize,
                                     );
+                                    // Snapshot the (about-to-be-restored) state
+                                    // so the next undo can roll it back.
                                     mistakeUndoStack.push({
-                                        pos: mistakePos,
-                                        oldCard: srsData[mistakePos]
-                                            ? { ...srsData[mistakePos] }
+                                        pos: redo.pos,
+                                        oldCard: srsData[redo.pos]
+                                            ? { ...srsData[redo.pos] }
                                             : null,
                                         digits,
-                                        rating: 1,
+                                        rating: redo.rating,
+                                        countedAsReview:
+                                            redo.countedAsReview,
                                     });
                                     if (mistakeUndoStack.length > 20)
                                         mistakeUndoStack.shift();
@@ -6544,10 +6607,13 @@
                                         if (redo.newCard)
                                             srsData[redo.pos] = redo.newCard;
                                         else delete srsData[redo.pos];
-                                        // Re-apply the review stat
-                                        const _today = srsToday();
-                                        dailyReviewStats[_today] =
-                                            (dailyReviewStats[_today] || 0) + 1;
+                                        // Re-apply the review stat only if
+                                        // the original rating counted.
+                                        if (redo.countedAsReview) {
+                                            const _today = srsToday();
+                                            dailyReviewStats[_today] =
+                                                (dailyReviewStats[_today] || 0) + 1;
+                                        }
                                         srsUpdateBadge();
                                         saveSettings();
                                         const ratingLabel = redo.rating === 4 ? "Hard" : "Again";
