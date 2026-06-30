@@ -1905,18 +1905,43 @@
                                     sequenceStartIndex +
                                     currentInputLength -
                                     _chunkSize;
-                                // Auto-rate Good on the SRS card for this chunk if:
-                                // 1. The chunk exists in the SRS deck
-                                // 2. M (Again) wasn't pressed on this chunk
-                                // 3. The chunk hasn't already been completed today
-                                //    (prevents re-typing from pushing the interval further out)
+                                // Compute the furthest card currently in the
+                                // SRS deck so we can warn the user when they
+                                // type a chunk past their review range.
+                                const _srsPositions = Object.keys(
+                                    srsData,
+                                ).map(Number);
+                                const _maxCardPos =
+                                    _srsPositions.length > 0
+                                        ? Math.max(..._srsPositions)
+                                        : 0;
                                 if (
-                                    srsData[completedChunkStart] &&
-                                    !currentChunkMistakePressed &&
-                                    posTypedDates[completedChunkStart] !== srsToday()
+                                    _srsPositions.length > 0 &&
+                                    completedChunkStart > _maxCardPos
                                 ) {
-                                    srsRate(completedChunkStart, 3); // Good
-                                    srsUpdateBadge();
+                                    // Past the review range — don't add to deck.
+                                    // Toast every time (no gating) so the user
+                                    // always knows why nothing was added.
+                                    showToast(
+                                        `Chunk at #${completedChunkStart + 1} not added. Max is at #${_maxCardPos + 1}`,
+                                    );
+                                } else if (
+                                    posTypedDates[completedChunkStart] !==
+                                    srsToday()
+                                ) {
+                                    // First completion today (within range).
+                                    // Auto-add the chunk to the deck if it has
+                                    // no card yet — first-time typing creates
+                                    // a learning-state card. Subsequent typings
+                                    // (or hotkey/auto-mistake-created cards)
+                                    // just get reviewed.
+                                    if (!srsData[completedChunkStart]) {
+                                        srsAddCard(completedChunkStart);
+                                    }
+                                    if (!currentChunkMistakePressed) {
+                                        srsRate(completedChunkStart, 3); // Good
+                                        srsUpdateBadge();
+                                    }
                                 }
                                 posTypedDates[completedChunkStart] = srsToday();
                             }
@@ -3038,12 +3063,14 @@
                             const digits = `${d.pNum} / ${d.aNum} / ${d.oNum}`;
 
                             // Build header with due date distance.
-                            // Learning-state cards get no due-info at all
-                            // (no "NOT ADDED" and no "OVERDUE" / "DUE …").
+                            // All empty cells (#222222 — no card, or card
+                            // in learning state) get no due-info line.
+                            // The "NOT ADDED" label was removed because
+                            // typed-but-not-added chunks and never-typed
+                            // chunks now look the same: both are just
+                            // "not in your review deck."
                             let dueInfo = "";
-                            if (!card) {
-                                dueInfo = " · NOT ADDED";
-                            } else if (cardIsLearning) {
+                            if (!card || cardIsLearning) {
                                 dueInfo = "";
                             } else if (daysUntilDue < 0) {
                                 const overdue = Math.abs(daysUntilDue);
