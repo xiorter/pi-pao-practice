@@ -1058,6 +1058,11 @@
                     let y = e.clientY + pad;
                     if (x + pw > window.innerWidth) x = e.clientX - pw - pad;
                     if (y + ph > window.innerHeight) y = e.clientY - ph - pad;
+                    // Clamp to viewport so the popup is never partially
+                    // off-screen (e.g. when the popup is taller than the
+                    // viewport, or the flip puts it past the top edge).
+                    x = Math.max(0, Math.min(x, window.innerWidth - pw));
+                    y = Math.max(0, Math.min(y, window.innerHeight - ph));
                     imgPopup.style.left = x + "px";
                     imgPopup.style.top = y + "px";
                 }
@@ -1917,7 +1922,8 @@
                                         : 0;
                                 if (
                                     _srsPositions.length > 0 &&
-                                    completedChunkStart > _maxCardPos
+                                    completedChunkStart >
+                                        _maxCardPos + _chunkSize
                                 ) {
                                     // Past the review range — don't add to deck.
                                     // Toast every time (no gating) so the user
@@ -2983,7 +2989,12 @@
                     // Find the max card position (furthest card in SRS deck)
                     const srsPositions = Object.keys(srsData).map(Number);
                     const maxCardPos = srsPositions.length > 0 ? Math.max(...srsPositions) : 0;
-                    const maxPos = Math.max(maxCardPos, sequenceStartIndex + 100, 300);
+                    // Pi coverage shows squares for actual cards only (plus a
+                    // 300-square floor for first-time users). We do NOT extend
+                    // the grid based on how far the user has typed — the
+                    // grid stays stable so users can see their review range
+                    // at a glance.
+                    const maxPos = Math.max(maxCardPos, 300);
 
                     let p = 0;
                     while (p < maxPos && p < PI_DIGITS.length) {
@@ -3131,6 +3142,12 @@
                                 let y = e.clientY + pad;
                                 if (x + pw > window.innerWidth) x = e.clientX - pw - pad;
                                 if (y + ph > window.innerHeight) y = e.clientY - ph - pad;
+                                // Clamp to viewport so the popup is never
+                                // partially off-screen (e.g. when the popup
+                                // is taller than the viewport, or the flip
+                                // puts it past the top edge).
+                                x = Math.max(0, Math.min(x, window.innerWidth - pw));
+                                y = Math.max(0, Math.min(y, window.innerHeight - ph));
                                 popup.style.left = x + "px";
                                 popup.style.top = y + "px";
                             };
