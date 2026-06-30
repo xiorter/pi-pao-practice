@@ -2842,15 +2842,54 @@
                     grid.style.cssText =
                         "display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,1fr);gap:2px;width:max-content;";
 
-                    // Count future due cards per day
-                    const futureDueByDate = {};
-                    let maxFutureDue = 0;
+                    // Project future-due card counts for each day in the
+                    // current year, matching Anki's heatmap behaviour:
+                    //   * Today's "backlog" (overdue + due-today review cards)
+                    //     is reduced by the user's daily review limit each day
+                    //     going forward, floored at zero.
+                    //   * Already-scheduled future cards are added on top.
+                    //   * Learning cards (reviews === 0) are excluded from the
+                    //     backlog — they're limited by newPerDay, not maxReviews.
+                    const _cfg = srsGetSettings();
+                    const _dailyReviewRate = _cfg.maxReviews || 200;
+                    const _backlog = Object.values(srsData).filter(
+                        (c) => c.reviews > 0 && c.dueDate <= todayStr,
+                    ).length;
+                    // Already-scheduled future cards (current behaviour).
+                    const _alreadyScheduled = {};
                     for (const posStr in srsData) {
                         const card = srsData[posStr];
                         if (card.dueDate > todayStr) {
-                            futureDueByDate[card.dueDate] = (futureDueByDate[card.dueDate] || 0) + 1;
-                            maxFutureDue = Math.max(maxFutureDue, futureDueByDate[card.dueDate]);
+                            _alreadyScheduled[card.dueDate] =
+                                (_alreadyScheduled[card.dueDate] || 0) + 1;
                         }
+                    }
+                    const futureDueByDate = {};
+                    let maxFutureDue = 0;
+                    const _startDate = new Date(todayStr + "T00:00:00");
+                    const _cursor = new Date(_startDate);
+                    _cursor.setDate(_cursor.getDate() + 1); // start at tomorrow
+                    while (_cursor <= gridEnd) {
+                        const _dateStr =
+                            _cursor.getFullYear() +
+                            "-" +
+                            String(_cursor.getMonth() + 1).padStart(2, "0") +
+                            "-" +
+                            String(_cursor.getDate()).padStart(2, "0");
+                        const _daysPassed = Math.round(
+                            (_cursor - _startDate) / 86400000,
+                        );
+                        const _backlogRemaining = Math.max(
+                            0,
+                            _backlog - _daysPassed * _dailyReviewRate,
+                        );
+                        const _scheduledForDay = _alreadyScheduled[_dateStr] || 0;
+                        const _totalDue = _backlogRemaining + _scheduledForDay;
+                        if (_totalDue > 0) {
+                            futureDueByDate[_dateStr] = _totalDue;
+                            if (_totalDue > maxFutureDue) maxFutureDue = _totalDue;
+                        }
+                        _cursor.setDate(_cursor.getDate() + 1);
                     }
                     if (maxFutureDue === 0) maxFutureDue = 1;
 
