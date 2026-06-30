@@ -5300,7 +5300,7 @@
                             return;
                         }
                         if (
-                            (e.code === "Space" || e.code === "Enter") &&
+                            (e.code === "Space" || e.key === "Enter") &&
                             !revealed
                         ) {
                             e.preventDefault();
