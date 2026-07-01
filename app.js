@@ -86,6 +86,12 @@
                 let mistakeUndoStack = []; // [{ pos, oldCard }]
                 let mistakeRedoStack = []; // [{ pos, newCard }]
 
+                // Undo/Redo stacks for ratings made inside the Browse modal
+                // (1-4 shortcuts). Separate from the A/H hotkey stacks so
+                // ratings in the two contexts don't interfere with each other.
+                let browseRateHistory = []; // [{ pos, oldCard, isDue, rating }]
+                let browseRateRedo = []; // [{ pos, newCard, isDue, rating }]
+
                 // ── Goal bar settings ──
                 let goalBarUpdate = "digit"; // "digit" | "group" | "chunk"
                 let goalBarPosition = "top"; // "top" | "bottom"
@@ -1871,7 +1877,7 @@
                                     step: 0,
                                 };
                             }
-                            srsRate(_mistakePos, 1);
+                            srsRate(_mistakePos, 1, srsIsDue(_mistakePos));
                             currentChunkMistakePressed = true;
                             srsUpdateBadge();
                             const _paoD = getPAOGroupDataByPos(
@@ -1945,7 +1951,7 @@
                                         srsAddCard(completedChunkStart);
                                     }
                                     if (!currentChunkMistakePressed) {
-                                        srsRate(completedChunkStart, 3); // Good
+                                        srsRate(completedChunkStart, 3, srsIsDue(completedChunkStart)); // Good
                                         srsUpdateBadge();
                                     }
                                 }
@@ -2508,6 +2514,10 @@
                         practiceIndex = startIndex;
                         saveSettings();
                     }
+                    // Clear browse-modal undo/redo so they don't leak
+                    // between sessions.
+                    browseRateHistory = [];
+                    browseRateRedo = [];
                     renderPracticeCard();
                 }
 
@@ -4780,7 +4790,7 @@
                                         lapses: 0,
                                         step: 0,
                                     };
-                                const _countedAsReview = srsRate(p, 1); // Again
+                                const _countedAsReview = srsRate(p, 1, srsIsDue(p)); // Again
                                 mistakeUndoStack.push({
                                     pos: p,
                                     oldCard: _oldCardEverest,
@@ -6406,6 +6416,136 @@
                                 practiceModal.style.display = "none";
                                 piInput.focus();
                             }
+                            // 1-4: rate the card at the current browse position.
+                            // The rating only counts as a review in the stats
+                            // if the card was currently due (srsIsDue). The
+                            // cap in srsRate already prevents the due date
+                            // from being pushed further out for not-yet-due
+                            // cards, so we don't need to add extra guards here.
+                            const _ratingKey =
+                                e.key === "1"
+                                    ? 1
+                                    : e.key === "2"
+                                      ? 2
+                                      : e.key === "3"
+                                        ? 3
+                                        : e.key === "4"
+                                          ? 4
+                                          : 0;
+                            if (_ratingKey) {
+                                e.preventDefault();
+                                const _pos = practiceIndex;
+                                const _isDue = srsIsDue(_pos);
+                                const _oldCard = srsData[_pos]
+                                    ? { ...srsData[_pos] }
+                                    : null;
+                                browseRateHistory.push({
+                                    pos: _pos,
+                                    oldCard: _oldCard,
+                                    isDue: _isDue,
+                                    rating: _ratingKey,
+                                });
+                                if (browseRateHistory.length > 20)
+                                    browseRateHistory.shift();
+                                browseRateRedo = [];
+                                srsRate(_pos, _ratingKey, _isDue);
+                                srsUpdateBadge();
+                                saveSettings();
+                                const _ratingLabel =
+                                    _ratingKey === 1
+                                        ? "Again"
+                                        : _ratingKey === 2
+                                          ? "Hard"
+                                          : _ratingKey === 3
+                                            ? "Good"
+                                            : "Easy";
+                                showToast(
+                                    `Card rated ${_ratingLabel} (image #${Math.floor(_pos / getGroupSizeForMode(getModeForPos(_pos + 1))) + 1})`,
+                                );
+                            }
+                            // Ctrl/Cmd+Z: undo last browse-modal rating.
+                            if (
+                                (e.ctrlKey || e.metaKey) &&
+                                e.key === "z"
+                            ) {
+                                e.preventDefault();
+                                if (browseRateHistory.length > 0) {
+                                    const _undo = browseRateHistory.pop();
+                                    browseRateRedo.push({
+                                        pos: _undo.pos,
+                                        newCard: srsData[_undo.pos]
+                                            ? { ...srsData[_undo.pos] }
+                                            : null,
+                                        isDue: _undo.isDue,
+                                        rating: _undo.rating,
+                                    });
+                                    if (browseRateRedo.length > 20)
+                                        browseRateRedo.shift();
+                                    if (_undo.oldCard)
+                                        srsData[_undo.pos] = _undo.oldCard;
+                                    else delete srsData[_undo.pos];
+                                    if (_undo.isDue) {
+                                        const _today = srsToday();
+                                        if (dailyReviewStats[_today] > 0)
+                                            dailyReviewStats[_today]--;
+                                    }
+                                    srsUpdateBadge();
+                                    saveSettings();
+                                    const _ratingLabel =
+                                        _undo.rating === 1
+                                            ? "Again"
+                                            : _undo.rating === 2
+                                              ? "Hard"
+                                              : _undo.rating === 3
+                                                ? "Good"
+                                                : "Easy";
+                                    showToast(
+                                        `↩ Rating undone (was ${_ratingLabel})`,
+                                    );
+                                }
+                            }
+                            // Ctrl/Cmd+Y: redo a previously-undone browse-modal rating.
+                            if (
+                                (e.ctrlKey || e.metaKey) &&
+                                e.key === "y"
+                            ) {
+                                e.preventDefault();
+                                if (browseRateRedo.length > 0) {
+                                    const _redo = browseRateRedo.pop();
+                                    const _oldCardNow = srsData[_redo.pos]
+                                        ? { ...srsData[_redo.pos] }
+                                        : null;
+                                    browseRateHistory.push({
+                                        pos: _redo.pos,
+                                        oldCard: _oldCardNow,
+                                        isDue: _redo.isDue,
+                                        rating: _redo.rating,
+                                    });
+                                    if (browseRateHistory.length > 20)
+                                        browseRateHistory.shift();
+                                    if (_redo.newCard)
+                                        srsData[_redo.pos] = _redo.newCard;
+                                    else delete srsData[_redo.pos];
+                                    if (_redo.isDue) {
+                                        const _today = srsToday();
+                                        dailyReviewStats[_today] =
+                                            (dailyReviewStats[_today] || 0) + 1;
+                                    }
+                                    srsUpdateBadge();
+                                    saveSettings();
+                                    const _ratingLabel =
+                                        _redo.rating === 1
+                                            ? "Again"
+                                            : _redo.rating === 2
+                                              ? "Hard"
+                                              : _redo.rating === 3
+                                                ? "Good"
+                                                : "Easy";
+                                    showToast(
+                                        `↪ Rating redone (${_ratingLabel})`,
+                                    );
+                                }
+                            }
                         } else if (!testMode) {
                             const anyModalOpen = [
                                 settingsModal,
@@ -6564,7 +6704,7 @@
                                         const _mode2 = getModeForPos(mistakePos + 1);
                                         const _gSize2 = getGroupSizeForMode(_mode2);
                                         const digits2 = PI_DIGITS.slice(mistakePos, mistakePos + _gSize2);
-                                        showToast(`${digits2} already marked as Again`);
+                                        showToast(`${digits2} already rated as Again`);
                                         return;
                                     }
                                     // Clear redo stack on new action
@@ -6592,7 +6732,7 @@
                                             step: 0,
                                         };
                                     }
-                                    const _countedAsReview = srsRate(mistakePos, 1); // Again
+                                    const _countedAsReview = srsRate(mistakePos, 1, srsIsDue(mistakePos)); // Again
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardAgain,
@@ -6613,7 +6753,7 @@
                                     const paoStr = paoD
                                         ? `${paoD.pTerm} / ${paoD.aTerm} / ${paoD.oTerm}`
                                         : `chunk at #${mistakePos + 1}`;
-                                    showToast(` ${digits} marked as Again`);
+                                    showToast(` ${digits} rated as Again`);
                                 }
                                 // H hotkey: add current chunk to SRS as Hard, show PAO toast
                                 if (
@@ -6628,7 +6768,7 @@
                                         const _mode2 = getModeForPos(mistakePos + 1);
                                         const _gSize2 = getGroupSizeForMode(_mode2);
                                         const digits2 = PI_DIGITS.slice(mistakePos, mistakePos + _gSize2);
-                                        showToast(`${digits2} already marked as Hard`);
+                                        showToast(`${digits2} already rated as Hard`);
                                         return;
                                     }
                                     mistakeRedoStack = [];
@@ -6653,7 +6793,7 @@
                                             step: 0,
                                         };
                                     }
-                                    const _countedAsReview = srsRate(mistakePos, 4); // Hard
+                                    const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardHard,
@@ -6670,7 +6810,7 @@
                                         mistakePos,
                                         _mode,
                                     );
-                                    showToast(` ${digits} marked as Hard`);
+                                    showToast(` ${digits} rated as Hard`);
                                 }
                                 // Ctrl+Z to undo last outside-SRS mistake
                                 if (
@@ -6712,7 +6852,7 @@
                                         const d = undo.digits || "chunk";
                                         const ratingLabel = undo.rating === 4 ? "Hard" : "Again";
                                         showToast(
-                                            `↩ ${d} unmarked (was ${ratingLabel})`,
+                                            `↩ ${d} unrated (was ${ratingLabel})`,
                                         );
                                     }
                                 }
@@ -6765,7 +6905,7 @@
                                         saveSettings();
                                         const ratingLabel = redo.rating === 4 ? "Hard" : "Again";
                                         showToast(
-                                            `↪ ${digits} re-marked as ${ratingLabel}`,
+                                            `↪ ${digits} re-rated as ${ratingLabel}`,
                                         );
                                     }
                                 }
