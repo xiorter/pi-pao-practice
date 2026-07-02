@@ -6435,6 +6435,31 @@
                             if (_ratingKey) {
                                 e.preventDefault();
                                 const _pos = practiceIndex;
+                                // Bail if the user spams the same rating at the
+                                // same position — mirrors the A/H hotkey guard
+                                // and avoids creating a flood of identical
+                                // undo entries.
+                                const _last = browseRateHistory[
+                                    browseRateHistory.length - 1
+                                ];
+                                if (
+                                    _last &&
+                                    _last.pos === _pos &&
+                                    _last.rating === _ratingKey
+                                ) {
+                                    const _dupLabel =
+                                        _ratingKey === 1
+                                            ? "Again"
+                                            : _ratingKey === 2
+                                              ? "Hard"
+                                              : _ratingKey === 3
+                                                ? "Good"
+                                                : "Easy";
+                                    showToast(
+                                        `Image #${posToGroupNum(_pos) + 1} already rated as ${_dupLabel}`,
+                                    );
+                                    return;
+                                }
                                 const _isDue = srsIsDue(_pos);
                                 const _oldCard = srsData[_pos]
                                     ? { ...srsData[_pos] }
@@ -6460,7 +6485,7 @@
                                             ? "Good"
                                             : "Easy";
                                 showToast(
-                                    `Card rated ${_ratingLabel} (image #${Math.floor(_pos / getGroupSizeForMode(getModeForPos(_pos + 1))) + 1})`,
+                                    `Card rated ${_ratingLabel} (image #${posToGroupNum(_pos) + 1})`,
                                 );
                             }
                             // Ctrl/Cmd+Z: undo last browse-modal rating.
@@ -6500,7 +6525,7 @@
                                                 ? "Good"
                                                 : "Easy";
                                     showToast(
-                                        `↩ Rating undone (was ${_ratingLabel})`,
+                                        `↩ Image #${posToGroupNum(_undo.pos) + 1} rating undone (was ${_ratingLabel})`,
                                     );
                                 }
                             }
@@ -6542,7 +6567,7 @@
                                                 ? "Good"
                                                 : "Easy";
                                     showToast(
-                                        `↪ Rating redone (${_ratingLabel})`,
+                                        `↪ Image #${posToGroupNum(_redo.pos) + 1} rating redone (${_ratingLabel})`,
                                     );
                                 }
                             }
