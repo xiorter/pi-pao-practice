@@ -746,7 +746,7 @@
                 // srsData[pos] = { interval, easeFactor, dueDate (ISO string), reviews, lapses }
                 let srsData = {};
                 let practiceIndex = 0;
-                let isReviewMode = false; // kept for minimal compat, always false now
+                let isReviewMode = false; // browse modal: force-rate-before-advance mode
 
                 // Anki image state
                 // ankiImages[numStr]  = { personSrc, objectSrc }  — Millennium PAO (3-digit keys)
@@ -1317,6 +1317,7 @@
                         goalBarHidden = s.goalBarHidden ?? false;
                         dayOffsetHours = s.dayOffsetHours ?? 4;
                         srsRawMode = s.srsRawMode ?? false;
+                        isReviewMode = s.isReviewMode ?? false;
                         currentScale = s.currentScale || "major";
                         currentWaveform = s.currentWaveform || "sine";
                         useCustomBg = s.useCustomBg ?? false;
@@ -1744,6 +1745,7 @@
                         dailyStats,
                         dailyReviewStats,
                         posTypedDates,
+                        isReviewMode,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -2508,7 +2510,6 @@
 
                 // --- Flashcards ---
                 function openFlashcards(startIndex) {
-                    isReviewMode = false;
                     practiceModal.style.display = "block";
                     if (startIndex !== undefined) {
                         practiceIndex = startIndex;
@@ -2518,6 +2519,9 @@
                     // between sessions.
                     browseRateHistory = [];
                     browseRateRedo = [];
+                    // Restore review-mode state from settings and apply
+                    // the relevant UI (hide nav, disable seek, etc.).
+                    applyReviewModeUI();
                     renderPracticeCard();
                 }
 
@@ -2670,7 +2674,7 @@
                     // If the date changed, reset all credit state (typed digits from yesterday
                     // should not count toward today's goal).
                     if (dailyCreditedDate !== today) {
-                        dailyCreditedSeqStart = -1;
+                        dailyCreditedSeqStart = sequenceStartIndex;
                         dailyCreditedMaxLength = val.length; // skip crediting existing digits
                         dailyCreditedAmount = 0;
                         dailyCreditedDate = today;
@@ -4994,6 +4998,18 @@
                         saveSettings();
                     });
 
+                    // When the tab becomes visible after a day change,
+                    // re-credit so the goal bar shows the correct count
+                    // for today without requiring a keystroke.
+                    document.addEventListener("visibilitychange", () => {
+                        if (
+                            document.visibilityState === "visible" &&
+                            typeof creditDailyDigits === "function"
+                        ) {
+                            creditDailyDigits(piInput.value || "");
+                        }
+                    });
+
                     // Prevent buttons stealing focus from piInput on mobile
                     document
                         .querySelectorAll(
@@ -5284,6 +5300,57 @@
                         handleNav(-1);
                     document.getElementById("practiceNextBtn").onclick = () =>
                         handleNav(1);
+
+                    // Review-mode toggle for the browse modal.
+                    const _rtBtn = document.getElementById("reviewModeToggle");
+                    if (_rtBtn) {
+                        _rtBtn.onclick = () => {
+                            isReviewMode = !isReviewMode;
+                            applyReviewModeUI();
+                            saveSettings();
+                        };
+                    }
+                    function applyReviewModeUI() {
+                        // Prev/next buttons: hidden in review mode.
+                        const _prev = document.getElementById("practicePrevBtn");
+                        const _next =
+                            document.getElementById("practiceNextBtn");
+                        if (_prev) _prev.style.display = isReviewMode ? "none" : "";
+                        if (_next)
+                            _next.style.display = isReviewMode ? "none" : "";
+                        // Seek inputs: disabled in review mode.
+                        if (practiceSeekPos)
+                            practiceSeekPos.disabled = isReviewMode;
+                        if (practiceSeekImg)
+                            practiceSeekImg.disabled = isReviewMode;
+                        // Toggle button visual state.
+                        if (_rtBtn) {
+                            _rtBtn.style.background = isReviewMode
+                                ? "var(--accent)"
+                                : "transparent";
+                            _rtBtn.style.color = isReviewMode
+                                ? "white"
+                                : "#888";
+                            _rtBtn.style.borderColor = isReviewMode
+                                ? "var(--accent)"
+                                : "#ccc";
+                        }
+                        // Indicator badge in the modal body.
+                        const _indicator = document.getElementById(
+                            "reviewModeIndicator",
+                        );
+                        if (_indicator) {
+                            _indicator.style.display = isReviewMode
+                                ? "block"
+                                : "none";
+                            if (isReviewMode) {
+                                _indicator.textContent =
+                                    "Review mode — rate with 1-4 to advance";
+                                _indicator.style.cssText =
+                                    "text-align:center;font-size:0.75rem;color:var(--accent);padding:4px 0;font-weight:bold;";
+                            }
+                        }
+                    }
 
                     // SRS events
                     document.getElementById("openSRSButton").onclick =
@@ -6397,18 +6464,23 @@
 
                         if (practiceModal.style.display === "block") {
                             if (
-                                e.key === "ArrowLeft" ||
-                                e.key === "a" ||
-                                e.key === "A"
+                                !isReviewMode &&
+                                (e.key === "ArrowLeft" ||
+                                    e.key === "a" ||
+                                    e.key === "A")
                             )
                                 handleNav(-1);
                             if (
-                                e.key === "ArrowRight" ||
-                                e.key === "d" ||
-                                e.key === "D"
+                                !isReviewMode &&
+                                (e.key === "ArrowRight" ||
+                                    e.key === "d" ||
+                                    e.key === "D")
                             )
                                 handleNav(1);
-                            if (e.key === " " || e.key === "Enter") {
+                            if (
+                                !isReviewMode &&
+                                (e.key === " " || e.key === "Enter")
+                            ) {
                                 e.preventDefault();
                                 handleNav(1);
                             }
@@ -6487,6 +6559,8 @@
                                 showToast(
                                     `Card rated ${_ratingLabel} (image #${posToGroupNum(_pos) + 1})`,
                                 );
+                                // In review mode, auto-advance to the next card.
+                                if (isReviewMode) handleNav(1);
                             }
                             // Ctrl/Cmd+Z: undo last browse-modal rating.
                             if (
