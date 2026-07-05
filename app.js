@@ -988,6 +988,7 @@
                         }
                         imgPopup.style.display = "block";
                         positionPopup(e);
+                        setTimeout(() => positionPopup(e), 50);
                     };
                     el._hoverMove = positionPopup;
                     el._hoverLeave = () => {
@@ -1044,6 +1045,7 @@
                         }
                         imgPopup.style.display = "block";
                         positionPopup(e);
+                        setTimeout(() => positionPopup(e), 50);
                     };
                     el._hoverMove = positionPopup;
                     el._hoverLeave = () => {
@@ -1057,7 +1059,6 @@
                 }
 
                 function positionPopup(e) {
-                    requestAnimationFrame(() => {
                     const pad = 14;
                     const pw = imgPopup.offsetWidth || 220;
                     const ph = imgPopup.offsetHeight || 220;
@@ -1072,7 +1073,6 @@
                     y = Math.max(0, Math.min(y, window.innerHeight - ph));
                     imgPopup.style.left = x + "px";
                     imgPopup.style.top = y + "px";
-                    });
                 }
 
                 // --- Init & Audio ---
@@ -3091,7 +3091,7 @@
                     console.log("renderPiCoverage", { maxCardPos, maxPos, srsPositions: srsPositions.slice(-5) });
 
                     let p = 0;
-                    while (p < maxPos && p < PI_DIGITS.length) {
+                    while (p <= maxPos && p < PI_DIGITS.length) {
                         const cellPos = p; // capture current position for closures
                         const mode = getModeForPos(p + 1);
                         const gs = getGroupSizeForMode(mode);
@@ -3229,19 +3229,11 @@
                                 }
                                 popup.style.display = "block";
 
-                                requestAnimationFrame(() => {
-                                const pad = 14;
-                                const pw = popup.offsetWidth || 220;
-                                const ph = popup.offsetHeight || 220;
-                                let x = e.clientX + pad;
-                                let y = e.clientY + pad;
-                                if (x + pw > window.innerWidth) x = e.clientX - pw - pad;
-                                if (y + ph > window.innerHeight) y = e.clientY - ph - pad;
-                                x = Math.max(0, Math.min(x, window.innerWidth - pw));
-                                y = Math.max(0, Math.min(y, window.innerHeight - ph));
-                                popup.style.left = x + "px";
-                                popup.style.top = y + "px";
-                                });
+                                // Position now (images may not be loaded yet)
+                                // and again after a short delay so the flip/
+                                // clamp uses accurate dimensions.
+                                positionPopup(e);
+                                setTimeout(() => positionPopup(e), 50);
                             };
                             cell._hoverLeave = () => {
                                 const popup = document.getElementById("imgPopup");
@@ -6574,7 +6566,13 @@
                             // cap in srsRate already prevents the due date
                             // from being pushed further out for not-yet-due
                             // cards, so we don't need to add extra guards here.
+                            // Don't intercept 1-4 if the user is typing in a
+                            // seek input (position or image number box).
+                            const _isInput =
+                                document.activeElement &&
+                                document.activeElement.tagName === "INPUT";
                             const _ratingKey =
+                                !_isInput &&
                                 e.key === "1"
                                     ? 1
                                     : e.key === "2"
