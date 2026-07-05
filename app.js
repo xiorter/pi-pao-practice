@@ -3114,12 +3114,12 @@
                             card.interval > 0 &&
                             (card.step === undefined || card.step < 0);
                         const cardIsLearning = card && !cardInReviewDeck;
-                        const _cellIsNotAdded = !card || cardIsLearning;
+                        const _cellIsNotAdded = !card;
 
                         // Compute color based on mode, and count stats
                         let daysUntilDue = 0;
                         let dueDateStr = "";
-                        if (!card || cardIsLearning) {
+                            if (!card) {
                             // No card, or added but not yet in the review deck
                             // — render empty and don't compute due stats.
                             cell.style.background = pcEmpty;
@@ -3172,7 +3172,7 @@
                             // chunks now look the same: both are just
                             // "not in your review deck."
                             let dueInfo = "";
-                            if (!card || cardIsLearning) {
+                        if (!card) {
                                 dueInfo = "";
                             } else if (daysUntilDue < 0) {
                                 const overdue = Math.abs(daysUntilDue);
@@ -3341,17 +3341,24 @@
                     if (todayBtn) todayBtn.disabled = false;
                     if (removeBtn) removeBtn.disabled = !card;
 
-                    // Attach fresh onclick handlers (replaces any previous handlers)
+                    // Attach fresh click handler (replaces any previous).
                     if (applyBtn) {
-                        applyBtn.onclick = (ev) => {
+                        if (applyBtn._applyHandler) {
+                            applyBtn.removeEventListener(
+                                "click",
+                                applyBtn._applyHandler,
+                            );
+                        }
+                        applyBtn._applyHandler = (ev) => {
                             ev.stopPropagation();
-                            console.log("Context Apply", { pos: _piContextPos, hasCard: !!srsData[_piContextPos], val: daysInput?.value });
+                            // Visual feedback: briefly flash button text.
+                            const origText = applyBtn.textContent;
+                            applyBtn.textContent = "✓";
+                            setTimeout(() => {
+                                applyBtn.textContent = origText;
+                            }, 400);
                             if (_piContextPos === null) return;
                             if (!srsData[_piContextPos]) {
-                                // Direct creation (not srsAddCard which
-                                // creates learning-state cards). interval > 0
-                                // and no `step` field means the card is
-                                // treated as graduated and shows colored.
                                 const _d = Math.max(
                                     0,
                                     parseInt(daysInput.value) || 0,
@@ -3380,9 +3387,19 @@
                             srsUpdateBadge();
                             hidePiContextMenu();
                         };
+                        applyBtn.addEventListener(
+                            "click",
+                            applyBtn._applyHandler,
+                        );
                     }
                     if (todayBtn) {
-                        todayBtn.onclick = (ev) => {
+                        if (todayBtn._todayHandler) {
+                            todayBtn.removeEventListener(
+                                "click",
+                                todayBtn._todayHandler,
+                            );
+                        }
+                        todayBtn._todayHandler = (ev) => {
                             ev.stopPropagation();
                             if (_piContextPos === null) return;
                             if (!srsData[_piContextPos]) {
@@ -3406,9 +3423,19 @@
                             srsUpdateBadge();
                             hidePiContextMenu();
                         };
+                        todayBtn.addEventListener(
+                            "click",
+                            todayBtn._todayHandler,
+                        );
                     }
                     if (removeBtn) {
-                        removeBtn.onclick = (ev) => {
+                        if (removeBtn._removeHandler) {
+                            removeBtn.removeEventListener(
+                                "click",
+                                removeBtn._removeHandler,
+                            );
+                        }
+                        removeBtn._removeHandler = (ev) => {
                             ev.stopPropagation();
                             if (_piContextPos === null) return;
                             delete srsData[_piContextPos];
@@ -3418,6 +3445,10 @@
                             srsUpdateBadge();
                             hidePiContextMenu();
                         };
+                        removeBtn.addEventListener(
+                            "click",
+                            removeBtn._removeHandler,
+                        );
                     }
 
                     menu.style.display = "block";
