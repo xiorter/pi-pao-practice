@@ -3341,15 +3341,19 @@
                     if (todayBtn) todayBtn.disabled = false;
                     if (removeBtn) removeBtn.disabled = !card;
 
-                    // Attach fresh click handler (replaces any previous).
+                    // Attach fresh mousedown handlers (replaces any previous).
+                    // Using mousedown instead of click because click was not
+                    // firing for empty squares — something was consuming the
+                    // click event before it reached the context menu buttons.
                     if (applyBtn) {
                         if (applyBtn._applyHandler) {
                             applyBtn.removeEventListener(
-                                "click",
+                                "mousedown",
                                 applyBtn._applyHandler,
                             );
                         }
                         applyBtn._applyHandler = (ev) => {
+                            ev.preventDefault();
                             ev.stopPropagation();
                             // Visual feedback: briefly flash button text.
                             const origText = applyBtn.textContent;
@@ -3388,23 +3392,22 @@
                             hidePiContextMenu();
                         };
                         applyBtn.addEventListener(
-                            "click",
+                            "mousedown",
                             applyBtn._applyHandler,
                         );
                     }
                     if (todayBtn) {
                         if (todayBtn._todayHandler) {
                             todayBtn.removeEventListener(
-                                "click",
+                                "mousedown",
                                 todayBtn._todayHandler,
                             );
                         }
                         todayBtn._todayHandler = (ev) => {
+                            ev.preventDefault();
                             ev.stopPropagation();
                             if (_piContextPos === null) return;
                             if (!srsData[_piContextPos]) {
-                                // Direct creation (not srsAddCard) so
-                                // the card shows colored immediately.
                                 srsData[_piContextPos] = {
                                     interval: 1,
                                     easeFactor: 2.5,
@@ -3424,18 +3427,19 @@
                             hidePiContextMenu();
                         };
                         todayBtn.addEventListener(
-                            "click",
+                            "mousedown",
                             todayBtn._todayHandler,
                         );
                     }
                     if (removeBtn) {
                         if (removeBtn._removeHandler) {
                             removeBtn.removeEventListener(
-                                "click",
+                                "mousedown",
                                 removeBtn._removeHandler,
                             );
                         }
                         removeBtn._removeHandler = (ev) => {
+                            ev.preventDefault();
                             ev.stopPropagation();
                             if (_piContextPos === null) return;
                             delete srsData[_piContextPos];
@@ -3446,7 +3450,7 @@
                             hidePiContextMenu();
                         };
                         removeBtn.addEventListener(
-                            "click",
+                            "mousedown",
                             removeBtn._removeHandler,
                         );
                     }
