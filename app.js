@@ -1057,6 +1057,7 @@
                 }
 
                 function positionPopup(e) {
+                    requestAnimationFrame(() => {
                     const pad = 14;
                     const pw = imgPopup.offsetWidth || 220;
                     const ph = imgPopup.offsetHeight || 220;
@@ -1071,6 +1072,7 @@
                     y = Math.max(0, Math.min(y, window.innerHeight - ph));
                     imgPopup.style.left = x + "px";
                     imgPopup.style.top = y + "px";
+                    });
                 }
 
                 // --- Init & Audio ---
@@ -3114,12 +3116,12 @@
                             card.interval > 0 &&
                             (card.step === undefined || card.step < 0);
                         const cardIsLearning = card && !cardInReviewDeck;
-                        const _cellIsNotAdded = !card;
+                        const _cellIsNotAdded = !card || cardIsLearning;
 
                         // Compute color based on mode, and count stats
                         let daysUntilDue = 0;
                         let dueDateStr = "";
-                            if (!card) {
+                        if (!card || cardIsLearning) {
                             // No card, or added but not yet in the review deck
                             // — render empty and don't compute due stats.
                             cell.style.background = pcEmpty;
@@ -3172,7 +3174,7 @@
                             // chunks now look the same: both are just
                             // "not in your review deck."
                             let dueInfo = "";
-                        if (!card) {
+                            if (!card || cardIsLearning) {
                                 dueInfo = "";
                             } else if (daysUntilDue < 0) {
                                 const overdue = Math.abs(daysUntilDue);
@@ -3226,6 +3228,7 @@
                                 }
                                 popup.style.display = "block";
 
+                                requestAnimationFrame(() => {
                                 const pad = 14;
                                 const pw = popup.offsetWidth || 220;
                                 const ph = popup.offsetHeight || 220;
@@ -3233,14 +3236,11 @@
                                 let y = e.clientY + pad;
                                 if (x + pw > window.innerWidth) x = e.clientX - pw - pad;
                                 if (y + ph > window.innerHeight) y = e.clientY - ph - pad;
-                                // Clamp to viewport so the popup is never
-                                // partially off-screen (e.g. when the popup
-                                // is taller than the viewport, or the flip
-                                // puts it past the top edge).
                                 x = Math.max(0, Math.min(x, window.innerWidth - pw));
                                 y = Math.max(0, Math.min(y, window.innerHeight - ph));
                                 popup.style.left = x + "px";
                                 popup.style.top = y + "px";
+                                });
                             };
                             cell._hoverLeave = () => {
                                 const popup = document.getElementById("imgPopup");
