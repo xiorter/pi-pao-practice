@@ -1841,7 +1841,7 @@
                             "mode-323",
                             currentPAOMode === "323",
                         );
-                        scrollOutputToBottom();
+                        outputContainer.scrollTop = outputContainer.scrollHeight;
                         outputDiv.scrollLeft = outputDiv.scrollWidth;
                         document.getElementById("position").innerHTML =
                             `#${sequenceStartIndex + 1} &thinsp;→&thinsp; #${sequenceStartIndex + currentInputLength} &thinsp;<span style="opacity:0.7;font-size:0.85em;">(${currentInputLength})</span>`;
@@ -2353,7 +2353,7 @@
                         "mode-323",
                         currentPAOMode === "323",
                     );
-                    scrollOutputToBottom();
+                    outputContainer.scrollTop = outputContainer.scrollHeight;
                     outputDiv.scrollLeft = outputDiv.scrollWidth;
 
                     // Wire dual-image hover on ALL groups (including correct)
@@ -2561,20 +2561,6 @@
                     // Sync the checkbox toggle with the current state.
                     const _cb = document.getElementById("reviewModeToggle");
                     if (_cb) _cb.checked = isReviewMode;
-                    // Indicator badge in the modal body.
-                    const _indicator = document.getElementById(
-                        "reviewModeIndicator",
-                    );
-                    if (_indicator) {
-                        _indicator.style.display = isReviewMode
-                            ? "block"
-                            : "none";
-                        if (isReviewMode) {
-                            _indicator.textContent = "Review Mode";
-                            _indicator.style.cssText =
-                                "text-align:center;font-size:0.75rem;color:var(--accent);padding:4px 0;font-weight:bold;";
-                        }
-                    }
                 }
 
                 function lookupAnkiEntry(num) {
@@ -2770,29 +2756,6 @@
                     // val.length <= dailyCreditedMaxLength (i.e. backspaced within already-
                     // credited territory): nothing to do. The max stays put so retyping the
                     // same ground doesn't get credited a second time.
-                }
-
-                // Scroll the output container so the last row is flush with
-                // the bottom edge. Snaps to row boundaries so the top row
-                // never gets partially cut off.
-                function scrollOutputToBottom() {
-                    const row = output && output.firstElementChild;
-                    if (!row || !outputContainer) return;
-                    const rowH = row.offsetHeight || 35;
-                    const gapStr = getComputedStyle(output).gap || "0.2em";
-                    const gapEm = parseFloat(gapStr) || 0.2;
-                    const fs = parseFloat(
-                        getComputedStyle(output).fontSize,
-                    ) || 16;
-                    const gapPx = Math.round(gapEm * fs) || 3;
-                    const step = rowH + gapPx;
-                    const maxScroll =
-                        outputContainer.scrollHeight -
-                        outputContainer.clientHeight;
-                    if (maxScroll > 0) {
-                        outputContainer.scrollTop =
-                            Math.round(maxScroll / step) * step;
-                    }
                 }
 
                 function computeCurrentStreak() {
@@ -3382,13 +3345,13 @@
                     if (applyBtn) {
                         applyBtn.onclick = (ev) => {
                             ev.stopPropagation();
+                            console.log("Context Apply", { pos: _piContextPos, hasCard: !!srsData[_piContextPos], val: daysInput?.value });
                             if (_piContextPos === null) return;
                             if (!srsData[_piContextPos]) {
-                                // Create a review-deck card directly
-                                // (not srsAddCard which creates learning
-                                // state). No `step` field means the
-                                // card is treated as graduated and will
-                                // show colored in pi coverage.
+                                // Direct creation (not srsAddCard which
+                                // creates learning-state cards). interval > 0
+                                // and no `step` field means the card is
+                                // treated as graduated and shows colored.
                                 const _d = Math.max(
                                     0,
                                     parseInt(daysInput.value) || 0,
