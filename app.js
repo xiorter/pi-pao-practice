@@ -3088,6 +3088,7 @@
                     // grid stays stable so users can see their review range
                     // at a glance.
                     const maxPos = Math.max(maxCardPos, 300);
+                    console.log("renderPiCoverage", { maxCardPos, maxPos, srsPositions: srsPositions.slice(-5) });
 
                     let p = 0;
                     while (p < maxPos && p < PI_DIGITS.length) {
@@ -3329,8 +3330,14 @@
                         if (!card) {
                             info.textContent = "Not in deck";
                         } else {
-                            const ease = card.easeFactor || 2.5;
-                            info.textContent = `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? "s" : ""} · Ease ${ease.toFixed(2)}`;
+                            const _crd = card.interval > 0 &&
+                                (card.step === undefined || card.step < 0);
+                            if (!_crd) {
+                                info.textContent = "In learning";
+                            } else {
+                                const ease = card.easeFactor || 2.5;
+                                info.textContent = `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? "s" : ""} · Ease ${ease.toFixed(2)}`;
+                            }
                         }
                     }
                     if (daysInput) {
@@ -3382,9 +3389,13 @@
                                 srsData[_piContextPos].dueDate =
                                     srsDaysFromNow(_d);
                                 srsData[_piContextPos].interval = Math.max(
-                                    _d,
-                                    srsData[_piContextPos].interval || 0,
+                                    1,
+                                    Math.max(
+                                        _d,
+                                        srsData[_piContextPos].interval || 0,
+                                    ),
                                 );
+                                srsData[_piContextPos].step = -1;
                             }
                             saveSettings();
                             renderPiCoverage();
@@ -3417,7 +3428,11 @@
                                 };
                             } else {
                                 srsData[_piContextPos].dueDate = srsToday();
-                                srsData[_piContextPos].interval = 0;
+                                srsData[_piContextPos].interval = Math.max(
+                                    1,
+                                    srsData[_piContextPos].interval || 0,
+                                );
+                                srsData[_piContextPos].step = -1;
                                 srsData[_piContextPos].reviews = 0;
                                 srsData[_piContextPos].lapses = 0;
                             }
