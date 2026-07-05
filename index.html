@@ -1116,22 +1116,6 @@
                 <span class="back-arrow" title="Back">←</span>
                 <span class="close" title="Close">×</span>
                 <h2 style="display:inline">Browse</h2>
-                <button
-                    id="reviewModeToggle"
-                    style="
-                        font-size: 0.75rem;
-                        padding: 2px 8px;
-                        margin-left: 8px;
-                        border: 1px solid #ccc;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        vertical-align: middle;
-                        background: transparent;
-                        color: #888;
-                    "
-                >
-                    Review
-                </button>
 
                 <div
                     id="practiceDisplay"
@@ -1147,78 +1131,86 @@
                         <div
                             style="
                                 display: flex;
-                                flex-direction: column;
-                                gap: 8px;
                                 align-items: center;
+                                gap: 8px;
                             "
                         >
-                            <div
+                            <label
+                                for="practiceSeekPos"
                                 style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
+                                    font-size: 0.8rem;
+                                    font-weight: bold;
+                                    width: 65px;
+                                    text-align: right;
+                                    margin: 0;
                                 "
+                                >POSITION</label
                             >
-                                <label
-                                    for="practiceSeekPos"
-                                    style="
-                                        font-size: 0.8rem;
-                                        font-weight: bold;
-                                        width: 65px;
-                                        text-align: right;
-                                        margin: 0;
-                                    "
-                                    >POSITION</label
-                                >
-                                <input
-                                    type="number"
-                                    id="practiceSeekPos"
-                                    class="short-input"
-                                    min="1"
-                                    inputmode="numeric"
-                                    style="
-                                        font-size: 1.1rem;
-                                        width: 80px;
-                                        padding: 4px;
-                                    "
-                                />
-                            </div>
-                            <div
+                            <input
+                                type="number"
+                                id="practiceSeekPos"
+                                class="short-input"
+                                min="1"
+                                inputmode="numeric"
                                 style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
+                                    font-size: 1.1rem;
+                                    width: 80px;
+                                    padding: 4px;
                                 "
+                            />
+                            <label
+                                for="practiceSeekImg"
+                                style="
+                                    font-size: 0.8rem;
+                                    font-weight: bold;
+                                    width: 65px;
+                                    text-align: right;
+                                    margin: 0;
+                                    margin-left: 8px;
+                                "
+                                >IMAGE</label
                             >
-                                <label
-                                    for="practiceSeekImg"
-                                    style="
-                                        font-size: 0.8rem;
-                                        font-weight: bold;
-                                        width: 65px;
-                                        text-align: right;
-                                        margin: 0;
-                                    "
-                                    >IMAGE</label
-                                >
-                                <input
-                                    type="number"
-                                    id="practiceSeekImg"
-                                    class="short-input"
-                                    min="1"
-                                    inputmode="numeric"
-                                    style="
-                                        font-size: 1.1rem;
-                                        width: 80px;
-                                        padding: 4px;
-                                    "
-                                />
-                            </div>
+                            <input
+                                type="number"
+                                id="practiceSeekImg"
+                                class="short-input"
+                                min="1"
+                                inputmode="numeric"
+                                style="
+                                    font-size: 1.1rem;
+                                    width: 80px;
+                                    padding: 4px;
+                                "
+                            />
                         </div>
 
                         <button id="practiceNextBtn" class="nav-button">
                             →
                         </button>
+                    </div>
+
+                    <div
+                        style="
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 6px;
+                            margin-bottom: 10px;
+                        "
+                    >
+                        <label
+                            style="
+                                font-size: 0.9rem;
+                                color: #666;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                            "
+                        >
+                            <input type="checkbox" id="reviewModeToggle" />
+                            Review Mode
+                        </label>
                     </div>
 
                     <div class="practice-card" id="flashcard">

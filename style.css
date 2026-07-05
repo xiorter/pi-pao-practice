@@ -1944,3 +1944,14 @@ input[type="file"]::-moz-file-upload-button {
     cursor: pointer;
     margin-right: 8px;
 }
+
+/* Hide the up/down arrows on number inputs — they take up space
+   and add visual clutter, especially in modal settings rows. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+}

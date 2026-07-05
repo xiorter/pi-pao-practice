@@ -1754,6 +1754,19 @@
                     setBackground();
                 }
 
+                // Debounced version of saveSettings for high-frequency paths
+                // (typing digits). Waits 300ms after the last keystroke before
+                // serializing and flushing to localStorage, so rapid typing
+                // doesn't cause jank.
+                let _saveSettingsTimer = null;
+                function saveSettingsDebounced() {
+                    if (_saveSettingsTimer) clearTimeout(_saveSettingsTimer);
+                    _saveSettingsTimer = setTimeout(() => {
+                        saveSettings();
+                        _saveSettingsTimer = null;
+                    }, 300);
+                }
+
                 // --- Game Logic ---
                 function checkPiDigits(input) {
                     let val = input.value.replace(/\D/g, "");
@@ -1821,15 +1834,14 @@
                         html += `<span class="digit-group">${inner}</span>`;
                         valPos += gSize;
                     }
-                    // Defer DOM update to next frame to prevent typing lag
+                        // Defer DOM update to next frame to prevent typing lag
                     requestAnimationFrame(() => {
                         outputDiv.innerHTML = html;
                         outputDiv.classList.toggle(
                             "mode-323",
                             currentPAOMode === "323",
                         );
-                        // Scroll to bottom to show most recent
-                        outputContainer.scrollTop = outputContainer.scrollHeight;
+                        scrollOutputToBottom();
                         outputDiv.scrollLeft = outputDiv.scrollWidth;
                         document.getElementById("position").innerHTML =
                             `#${sequenceStartIndex + 1} &thinsp;→&thinsp; #${sequenceStartIndex + currentInputLength} &thinsp;<span style="opacity:0.7;font-size:0.85em;">(${currentInputLength})</span>`;
@@ -2341,7 +2353,7 @@
                         "mode-323",
                         currentPAOMode === "323",
                     );
-                    outputContainer.scrollTop = outputContainer.scrollHeight;
+                    scrollOutputToBottom();
                     outputDiv.scrollLeft = outputDiv.scrollWidth;
 
                     // Wire dual-image hover on ALL groups (including correct)
@@ -2523,6 +2535,46 @@
                     // the relevant UI (hide nav, disable seek, etc.).
                     applyReviewModeUI();
                     renderPracticeCard();
+                }
+
+                // Apply/hide the review-mode UI inside the browse modal.
+                // In IIFE scope (not init()) so openFlashcards can call it.
+                function applyReviewModeUI() {
+                    // Prev/next buttons: keep their space in the flex layout
+                    // by using visibility + zero dimensions instead of
+                    // display:none, so the position/image inputs don't shift.
+                    const _prev = document.getElementById("practicePrevBtn");
+                    const _next = document.getElementById("practiceNextBtn");
+                    if (_prev)
+                        _prev.style.cssText = isReviewMode
+                            ? "visibility:hidden;width:0;padding:0;border:0;min-width:0;overflow:hidden"
+                            : "";
+                    if (_next)
+                        _next.style.cssText = isReviewMode
+                            ? "visibility:hidden;width:0;padding:0;border:0;min-width:0;overflow:hidden"
+                            : "";
+                    // Seek inputs: disabled in review mode.
+                    if (practiceSeekPos)
+                        practiceSeekPos.disabled = isReviewMode;
+                    if (practiceSeekImg)
+                        practiceSeekImg.disabled = isReviewMode;
+                    // Sync the checkbox toggle with the current state.
+                    const _cb = document.getElementById("reviewModeToggle");
+                    if (_cb) _cb.checked = isReviewMode;
+                    // Indicator badge in the modal body.
+                    const _indicator = document.getElementById(
+                        "reviewModeIndicator",
+                    );
+                    if (_indicator) {
+                        _indicator.style.display = isReviewMode
+                            ? "block"
+                            : "none";
+                        if (isReviewMode) {
+                            _indicator.textContent = "Review Mode";
+                            _indicator.style.cssText =
+                                "text-align:center;font-size:0.75rem;color:var(--accent);padding:4px 0;font-weight:bold;";
+                        }
+                    }
                 }
 
                 function lookupAnkiEntry(num) {
@@ -2718,6 +2770,29 @@
                     // val.length <= dailyCreditedMaxLength (i.e. backspaced within already-
                     // credited territory): nothing to do. The max stays put so retyping the
                     // same ground doesn't get credited a second time.
+                }
+
+                // Scroll the output container so the last row is flush with
+                // the bottom edge. Snaps to row boundaries so the top row
+                // never gets partially cut off.
+                function scrollOutputToBottom() {
+                    const row = output && output.firstElementChild;
+                    if (!row || !outputContainer) return;
+                    const rowH = row.offsetHeight || 35;
+                    const gapStr = getComputedStyle(output).gap || "0.2em";
+                    const gapEm = parseFloat(gapStr) || 0.2;
+                    const fs = parseFloat(
+                        getComputedStyle(output).fontSize,
+                    ) || 16;
+                    const gapPx = Math.round(gapEm * fs) || 3;
+                    const step = rowH + gapPx;
+                    const maxScroll =
+                        outputContainer.scrollHeight -
+                        outputContainer.clientHeight;
+                    if (maxScroll > 0) {
+                        outputContainer.scrollTop =
+                            Math.round(maxScroll / step) * step;
+                    }
                 }
 
                 function computeCurrentStreak() {
@@ -3297,10 +3372,10 @@
                     }
                     if (daysInput) {
                         daysInput.value = Math.max(0, daysUntilDue);
-                        daysInput.disabled = !card;
+                        daysInput.disabled = false;
                     }
-                    if (applyBtn) applyBtn.disabled = !card;
-                    if (todayBtn) todayBtn.disabled = !card;
+                    if (applyBtn) applyBtn.disabled = false;
+                    if (todayBtn) todayBtn.disabled = false;
                     if (removeBtn) removeBtn.disabled = !card;
 
                     // Attach fresh onclick handlers (replaces any previous handlers)
@@ -3308,13 +3383,35 @@
                         applyBtn.onclick = (ev) => {
                             ev.stopPropagation();
                             if (_piContextPos === null) return;
-                            if (!srsData[_piContextPos]) srsAddCard(_piContextPos);
-                            const days = Math.max(0, parseInt(daysInput.value) || 0);
-                            srsData[_piContextPos].dueDate = srsDaysFromNow(days);
-                            srsData[_piContextPos].interval = Math.max(
-                                days,
-                                srsData[_piContextPos].interval || 0
-                            );
+                            if (!srsData[_piContextPos]) {
+                                // Create a review-deck card directly
+                                // (not srsAddCard which creates learning
+                                // state). No `step` field means the
+                                // card is treated as graduated and will
+                                // show colored in pi coverage.
+                                const _d = Math.max(
+                                    0,
+                                    parseInt(daysInput.value) || 0,
+                                );
+                                srsData[_piContextPos] = {
+                                    interval: Math.max(1, _d),
+                                    easeFactor: 2.5,
+                                    dueDate: srsDaysFromNow(_d),
+                                    reviews: 0,
+                                    lapses: 0,
+                                };
+                            } else {
+                                const _d = Math.max(
+                                    0,
+                                    parseInt(daysInput.value) || 0,
+                                );
+                                srsData[_piContextPos].dueDate =
+                                    srsDaysFromNow(_d);
+                                srsData[_piContextPos].interval = Math.max(
+                                    _d,
+                                    srsData[_piContextPos].interval || 0,
+                                );
+                            }
                             saveSettings();
                             renderPiCoverage();
                             srsUpdateBadge();
@@ -3325,11 +3422,22 @@
                         todayBtn.onclick = (ev) => {
                             ev.stopPropagation();
                             if (_piContextPos === null) return;
-                            if (!srsData[_piContextPos]) srsAddCard(_piContextPos);
-                            srsData[_piContextPos].dueDate = srsToday();
-                            srsData[_piContextPos].interval = 0;
-                            srsData[_piContextPos].reviews = 0;
-                            srsData[_piContextPos].lapses = 0;
+                            if (!srsData[_piContextPos]) {
+                                // Direct creation (not srsAddCard) so
+                                // the card shows colored immediately.
+                                srsData[_piContextPos] = {
+                                    interval: 1,
+                                    easeFactor: 2.5,
+                                    dueDate: srsToday(),
+                                    reviews: 0,
+                                    lapses: 0,
+                                };
+                            } else {
+                                srsData[_piContextPos].dueDate = srsToday();
+                                srsData[_piContextPos].interval = 0;
+                                srsData[_piContextPos].reviews = 0;
+                                srsData[_piContextPos].lapses = 0;
+                            }
                             saveSettings();
                             renderPiCoverage();
                             srsUpdateBadge();
@@ -4995,7 +5103,7 @@
 
                     piInput.addEventListener("input", () => {
                         checkPiDigits(piInput);
-                        saveSettings();
+                        saveSettingsDebounced();
                     });
 
                     // When the tab becomes visible after a day change,
@@ -5304,52 +5412,11 @@
                     // Review-mode toggle for the browse modal.
                     const _rtBtn = document.getElementById("reviewModeToggle");
                     if (_rtBtn) {
-                        _rtBtn.onclick = () => {
-                            isReviewMode = !isReviewMode;
+                        _rtBtn.addEventListener("change", () => {
+                            isReviewMode = _rtBtn.checked;
                             applyReviewModeUI();
                             saveSettings();
-                        };
-                    }
-                    function applyReviewModeUI() {
-                        // Prev/next buttons: hidden in review mode.
-                        const _prev = document.getElementById("practicePrevBtn");
-                        const _next =
-                            document.getElementById("practiceNextBtn");
-                        if (_prev) _prev.style.display = isReviewMode ? "none" : "";
-                        if (_next)
-                            _next.style.display = isReviewMode ? "none" : "";
-                        // Seek inputs: disabled in review mode.
-                        if (practiceSeekPos)
-                            practiceSeekPos.disabled = isReviewMode;
-                        if (practiceSeekImg)
-                            practiceSeekImg.disabled = isReviewMode;
-                        // Toggle button visual state.
-                        if (_rtBtn) {
-                            _rtBtn.style.background = isReviewMode
-                                ? "var(--accent)"
-                                : "transparent";
-                            _rtBtn.style.color = isReviewMode
-                                ? "white"
-                                : "#888";
-                            _rtBtn.style.borderColor = isReviewMode
-                                ? "var(--accent)"
-                                : "#ccc";
-                        }
-                        // Indicator badge in the modal body.
-                        const _indicator = document.getElementById(
-                            "reviewModeIndicator",
-                        );
-                        if (_indicator) {
-                            _indicator.style.display = isReviewMode
-                                ? "block"
-                                : "none";
-                            if (isReviewMode) {
-                                _indicator.textContent =
-                                    "Review mode — rate with 1-4 to advance";
-                                _indicator.style.cssText =
-                                    "text-align:center;font-size:0.75rem;color:var(--accent);padding:4px 0;font-weight:bold;";
-                            }
-                        }
+                        });
                     }
 
                     // SRS events
