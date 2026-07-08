@@ -3728,7 +3728,12 @@
                         (c) => c.dueDate <= today,
                     );
                     const newCards = allDue.filter((c) => c.reviews === 0);
-                    const revCards = allDue.filter((c) => c.reviews > 0);
+                    const revCards = allDue.filter(
+                        (c) =>
+                            c.reviews > 0 &&
+                            c.interval > 0 &&
+                            (c.step === undefined || c.step < 0),
+                    );
                     // Respect daily limits
                     const newCount = Math.min(
                         newCards.length,
@@ -4252,7 +4257,11 @@
                         ([, v]) => v.dueDate <= today && v.reviews === 0,
                     );
                     let allDueReview = Object.entries(srsData).filter(
-                        ([, v]) => v.dueDate <= today && v.reviews > 0,
+                        ([, v]) =>
+                            v.dueDate <= today &&
+                            v.reviews > 0 &&
+                            v.interval > 0 &&
+                            (v.step === undefined || v.step < 0),
                     );
 
                     // Insertion order for new cards
@@ -4362,6 +4371,28 @@
                 let srsQueueBuildSettings = null; // cached settings fingerprint
 
                 function srsOpenModal() {
+                    // Migrate any learning cards that have been reviewed at
+                    // least once. Before the fix these appeared in the review
+                    // queue but showed empty in pi coverage. After migration
+                    // they turn coloured and use the normal SM-2 schedule.
+                    // This is idempotent: already-graduated cards don't match
+                    // the condition.
+                    let _migrated = 0;
+                    for (const posStr in srsData) {
+                        const c = srsData[posStr];
+                        if (
+                            c.reviews > 0 &&
+                            c.step !== undefined &&
+                            c.step >= 0 &&
+                            c.interval <= 0
+                        ) {
+                            c.step = -1;
+                            c.interval = 1;
+                            c.dueDate = srsToday();
+                            _migrated++;
+                        }
+                    }
+                    if (_migrated > 0) saveSettings();
                     const curCfg = srsGetSettings();
                     const curFingerprint = JSON.stringify(curCfg);
                     // Rebuild if date changed, queue empty, or settings changed (e.g. newPerDay)
