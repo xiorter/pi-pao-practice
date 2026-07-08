@@ -4075,7 +4075,7 @@
                     const cardType =
                         !card || card.reviews === 0
                             ? "new"
-                            : card.interval <= 1
+                            : card.step !== undefined && card.step >= 0
                               ? "learn"
                               : "review";
                     ["srsCountNew", "srsCountLearn", "srsCountReview"].forEach(
@@ -4392,7 +4392,10 @@
                             _migrated++;
                         }
                     }
-                    if (_migrated > 0) saveSettings();
+                    if (_migrated > 0) {
+                        saveSettings();
+                        srsUpdateBadge();
+                    }
                     const curCfg = srsGetSettings();
                     const curFingerprint = JSON.stringify(curCfg);
                     // Rebuild if date changed, queue empty, or settings changed (e.g. newPerDay)
