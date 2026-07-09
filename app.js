@@ -1908,30 +1908,41 @@
                     }
 
                     if (!testMode) {
-                        // Track which chunk the user is currently in (on every keystroke)
-                        const _mode = getModeForPos(sequenceStartIndex + 1);
-                        const _chunkSize = getGroupSizeForMode(_mode);
-                        const chunkStart = snapToGroupStart(sequenceStartIndex);
-
+                        // Determine which chunk the user is currently in and
+                        // whether they just completed one. Walks forward from
+                        // sequenceStartIndex, following the actual chunk sizes
+                        // at each step, so mixed 2-2-2/3-2-3 mode is handled
+                        // correctly (the old formula used a single chunk size
+                        // from the start of the sequence, which was wrong past
+                        // the crossover).
                         if (currentInputLength > 0) {
-                            // Compute the start of the chunk containing the last typed digit
-                            const currentChunkStart =
-                                sequenceStartIndex +
-                                currentInputLength -
-                                (currentInputLength % _chunkSize === 0
-                                    ? _chunkSize
-                                    : currentInputLength % _chunkSize);
-                            if (currentChunkStart !== currentTypingChunkPos) {
-                                currentTypingChunkPos = currentChunkStart;
+                            let _p = sequenceStartIndex;
+                            let _remaining = currentInputLength;
+                            let _currentChunkStart = sequenceStartIndex;
+                            let _atBoundary = false;
+                            let _completedChunkStart = -1;
+                            while (_remaining > 0) {
+                                const _gs = getGroupSizeForMode(
+                                    getModeForPos(_p + 1),
+                                );
+                                if (_p + _gs > PI_DIGITS.length) break;
+                                if (_remaining <= _gs) {
+                                    _currentChunkStart = _p;
+                                    if (_remaining === _gs) {
+                                        _atBoundary = true;
+                                        _completedChunkStart = _p;
+                                    }
+                                    break;
+                                }
+                                _remaining -= _gs;
+                                _p += _gs;
+                            }
+                            if (_currentChunkStart !== currentTypingChunkPos) {
+                                currentTypingChunkPos = _currentChunkStart;
                                 currentChunkMistakePressed = false;
                                 currentChunkLastRating = 0;
                             }
-                            // Record when a chunk boundary is fully completed
-                            if (currentInputLength % _chunkSize === 0) {
-                                const completedChunkStart =
-                                    sequenceStartIndex +
-                                    currentInputLength -
-                                    _chunkSize;
+                            if (_atBoundary) {
                                 // Compute the furthest card currently in the
                                 // SRS deck so we can warn the user when they
                                 // type a chunk past their review range.
@@ -1944,17 +1955,22 @@
                                         : 0;
                                 if (
                                     _srsPositions.length > 0 &&
-                                    completedChunkStart >
-                                        _maxCardPos + _chunkSize
+                                    _completedChunkStart >
+                                        _maxCardPos +
+                                            getGroupSizeForMode(
+                                                getModeForPos(
+                                                    _completedChunkStart + 1,
+                                                ),
+                                            )
                                 ) {
                                     // Past the review range — don't add to deck.
                                     // Toast every time (no gating) so the user
                                     // always knows why nothing was added.
                                     showToast(
-                                        `Chunk at #${completedChunkStart + 1} not added. Max is at #${_maxCardPos + 1}`,
+                                        `Chunk at #${_completedChunkStart + 1} not added. Max is at #${_maxCardPos + 1}`,
                                     );
                                 } else if (
-                                    posTypedDates[completedChunkStart] !==
+                                    posTypedDates[_completedChunkStart] !==
                                     srsToday()
                                 ) {
                                     // First completion today (within range).
@@ -1963,15 +1979,15 @@
                                     // a learning-state card. Subsequent typings
                                     // (or hotkey/auto-mistake-created cards)
                                     // just get reviewed.
-                                    if (!srsData[completedChunkStart]) {
-                                        srsAddCard(completedChunkStart);
+                                    if (!srsData[_completedChunkStart]) {
+                                        srsAddCard(_completedChunkStart);
                                     }
                                     if (!currentChunkMistakePressed) {
-                                        srsRate(completedChunkStart, 3, srsIsDue(completedChunkStart)); // Good
+                                        srsRate(_completedChunkStart, 3, srsIsDue(_completedChunkStart)); // Good
                                         srsUpdateBadge();
                                     }
                                 }
-                                posTypedDates[completedChunkStart] = srsToday();
+                                posTypedDates[_completedChunkStart] = srsToday();
                             }
                         } else {
                             currentTypingChunkPos = -1;
@@ -1981,7 +1997,9 @@
                         // Update goal bar based on user's chosen update frequency.
                         // Use lightweight update (no heatmap rebuild) to prevent typing lag.
                         const _pos = sequenceStartIndex + val.length;
+                        const _mode = getModeForPos(_pos + 1);
                         const _groupSize = _mode === "323" ? 3 : 2;
+                        const _chunkSize = getGroupSizeForMode(_mode);
                         const _shouldUpdate =
                             goalBarUpdate === "digit"
                                 ? true
