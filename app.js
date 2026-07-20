@@ -3135,8 +3135,14 @@
                                         ) || 1;
                                     label += ` ${days}d`;
                                 }
+                            } else {
+                                label += " -";
                             }
                             const _labelCell = document.createElement("div");
+                            // Capture the block number at label creation time
+                            // so the right-click listener uses the correct
+                            // block even after the loop has finished.
+                            const _thisBlock = currentBlock;
                             _labelCell.textContent = label;
                             _labelCell.style.cssText =
                                 "font-size:0.55rem;color:#888;white-space:nowrap;padding-right:2px;display:flex;align-items:center;height:12px;cursor:pointer;";
@@ -3148,9 +3154,9 @@
                                 // Show block context menu
                                 const menu = document.getElementById("piContextMenu");
                                 if (!menu) return;
-                                const _bd = studyBlockData[currentBlock];
+                                const _bd = studyBlockData[_thisBlock];
                                 const _h = menu.querySelector(".pi-context-header");
-                                if (_h) _h.textContent = `Block ${currentBlock + 1} — due in ?`; // format below
+                                if (_h) _h.textContent = `Block ${_thisBlock + 1} — due in ?`;
                                 const _info = menu.querySelector(".pi-context-info");
                                 if (_info) _info.textContent = _bd ? `Due: ${srsFormatDate(_bd.dueDate)}` : "Not scheduled";
                                 const _daysInput = document.getElementById("piContextDays");
@@ -3170,8 +3176,8 @@
                                         ev.preventDefault();
                                         ev.stopPropagation();
                                         const _d = Math.max(0, parseInt(document.getElementById("piContextDays").value) || 1);
-                                        if (studyBlockData[currentBlock]) {
-                                            studyBlockData[currentBlock].dueDate = srsDaysFromNow(_d);
+                                        if (studyBlockData[_thisBlock]) {
+                                            studyBlockData[_thisBlock].dueDate = srsDaysFromNow(_d);
                                             syncBlockDueDates();
                                             saveSettings();
                                             renderPiCoverage();
@@ -3186,8 +3192,8 @@
                                     _todayBtn.onclick = (ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
-                                        if (studyBlockData[currentBlock]) {
-                                            studyBlockData[currentBlock].dueDate = srsToday();
+                                        if (studyBlockData[_thisBlock]) {
+                                            studyBlockData[_thisBlock].dueDate = srsToday();
                                             syncBlockDueDates();
                                             saveSettings();
                                             renderPiCoverage();
@@ -3198,14 +3204,13 @@
                                 }
                                 const _removeBtn = document.getElementById("piContextRemove");
                                 if (_removeBtn) {
-                                    _removeBtn.textContent = "All caught up";
+                                    _removeBtn.textContent = "Done";
                                     _removeBtn.style.display = "";
                                     _removeBtn.onclick = (ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
-                                        // Set to far future so it disappears from due list
-                                        if (studyBlockData[currentBlock]) {
-                                            studyBlockData[currentBlock].dueDate = srsDaysFromNow(365 * 10);
+                                        if (studyBlockData[_thisBlock]) {
+                                            studyBlockData[_thisBlock].dueDate = srsDaysFromNow(1);
                                             syncBlockDueDates();
                                             saveSettings();
                                             renderPiCoverage();
@@ -3736,14 +3741,16 @@
                     }
                     // Note about where add-new-chunks will start
                     const { start: _frS, end: _frE } = blockRange(frontier);
-                    // Current frontier position (next untyped digit)
-                    const _srsPos = Object.keys(srsData).map(Number);
-                    const _maxPos = _srsPos.length > 0 ? Math.max(..._srsPos) + 1 : 1;
+                    const _frDigits = _frE - _frS + 1;
+                    const _frTyped = blockProgress[frontier] || 0;
+                    const _frPct = Math.round((_frTyped / _frDigits) * 100);
                     html +=
                         `<div class="checklist-item ` +
                         (due.length > 0 ? `frontier-item` : ``) +
                         `" data-action="add" style="cursor:pointer;padding:2px 0;">` +
                         `+ Add new chunks (${_frS + 1}-${_frE + 1})` +
+                        `<div style="background:rgba(255,255,255,0.12);border-radius:4px;height:6px;overflow:hidden;margin-top:2px;">` +
+                        `<div style="width:${_frPct}%;height:100%;background:var(--accent);border-radius:4px;transition:width 0.3s;"></div></div>` +
                         `</div>`;
                     el.innerHTML = html;
                     // Wire clicks
@@ -3761,19 +3768,22 @@
                                 // re-counted toward the daily goal.
                                 dailyCreditedSeqStart = 0;
                                 dailyCreditedMaxLength = target;
-                                piInput.dispatchEvent(
-                                    new Event("input"),
-                                );
+                                piInput.focus();
                             } else {
-                                // Add new: jump to frontier
-                                const target = snapToGroupStart(_maxPos);
+                                // Add new: jump to current frontier position
+                                const _srsPosA = Object.keys(srsData).map(Number);
+                                const _maxP = _srsPosA.length > 0 ? Math.max(..._srsPosA) : 0;
+                                const target = _maxP + getGroupSizeForMode(
+                                    getModeForPos(Math.max(1, _maxP + 1)),
+                                );
                                 piInput.value = PI_DIGITS.substr(0, target);
                                 sequenceStartIndex = 0;
-                                piInput.dispatchEvent(
-                                    new Event("input"),
-                                );
+                                // Prevent re-crediting digits that were
+                                // already typed (saved in credit state).
+                                dailyCreditedSeqStart = 0;
+                                dailyCreditedMaxLength = target;
+                                piInput.focus();
                             }
-                            piInput.focus();
                         });
                     });
                 }
