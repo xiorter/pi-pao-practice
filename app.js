@@ -97,7 +97,7 @@
                 let goalBarPosition = "top"; // "top" | "bottom"
                 let goalBarHidden = false;
                 let heatmapViewYear = new Date().getFullYear();
-                let heatmapMode = "both"; // "digits", "cards", or "both"
+                let heatmapMode = "digits"; // always digits
                 let piCoverageMode = "due"; // "due" or "ease"
                 let heatmapScheme = "ice"; // "ice" | "magenta"
 
@@ -472,8 +472,12 @@
                 // ── Daily Goal / Stats ──
                 let dailyGoal = 400;
                 let dailyStats = {}; // { "2026-06-21": correctDigitCount }
-                let dailyReviewStats = {}; // { "2026-06-21": reviewCount } — updated on each srsRate call
+                let studyBlockSize = 200; // digits per study block
+                let studyBlockData = {}; // { blockNum: { start, end, dueDate, interval, easeFactor, reviews, lapses } }
+                let blockProgress = {}; // { blockNum: digitsTypedSoFar }
+                let studyBlocksMigrated = false;
                 let posTypedDates = {}; // { chunkStartPos: "YYYY-MM-DD" } — last date a chunk was completed
+                let dailyActiveTotal = 0; // digits typed today within active blocks (for goal bar)
                 let dailyCreditedSeqStart = -1;
                 let dailyCreditedMaxLength = 0;
                 let dailyCreditedAmount = 0; // how much of today's total came from the current seq start
@@ -603,20 +607,6 @@
                             );
                         }
                         merged.dailyStats = mergedDStats;
-
-                        // dailyReviewStats: sum per day (both devices may have reviewed)
-                        const localRStats = local.dailyReviewStats || {};
-                        const remoteRStats = remote.dailyReviewStats || {};
-                        const mergedRStats = { ...localRStats };
-                        for (const [date, cnt] of Object.entries(
-                            remoteRStats,
-                        )) {
-                            mergedRStats[date] = Math.max(
-                                mergedRStats[date] || 0,
-                                cnt,
-                            );
-                        }
-                        merged.dailyReviewStats = mergedRStats;
 
                         // posTypedDates: keep the most recent date for each position
                         const localPTD = local.posTypedDates || {};
@@ -1258,7 +1248,6 @@
                         testShowTimer = s.testShowTimer ?? true;
                         dailyGoal = s.dailyGoal || 400;
                         dailyStats = s.dailyStats || {};
-                        dailyReviewStats = s.dailyReviewStats || {};
                         posTypedDates = s.posTypedDates || {};
                         personList = s.personList || {};
                         actionList = s.actionList || {};
@@ -1320,6 +1309,10 @@
                         dayOffsetHours = s.dayOffsetHours ?? 4;
                         srsRawMode = s.srsRawMode ?? false;
                         isReviewMode = s.isReviewMode ?? false;
+                        studyBlockSize = s.studyBlockSize ?? 200;
+                        studyBlockData = s.studyBlockData || {};
+                        studyBlocksMigrated = s.studyBlocksMigrated ?? false;
+                        blockProgress = s.blockProgress || {};
                         currentScale = s.currentScale || "major";
                         currentWaveform = s.currentWaveform || "sine";
                         useCustomBg = s.useCustomBg ?? false;
@@ -1518,9 +1511,9 @@
                         updateThemeColors();
                         setBackground();
                         updateSettingsUI();
-                        const goalInput =
-                            document.getElementById("dailyGoalInput");
-                        if (goalInput) goalInput.value = dailyGoal;
+                        const blockInput =
+                            document.getElementById("studyBlockSizeInput");
+                        if (blockInput) blockInput.value = studyBlockSize;
                         statsRefreshDisplay();
                         srsUpdateBadge();
                     } catch (e) {
@@ -1745,9 +1738,12 @@
                         testShowTimer,
                         dailyGoal,
                         dailyStats,
-                        dailyReviewStats,
                         posTypedDates,
                         isReviewMode,
+                        studyBlockSize,
+                        studyBlockData,
+                        studyBlocksMigrated,
+                        blockProgress,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -1969,23 +1965,47 @@
                                     showToast(
                                         `Chunk at #${_completedChunkStart + 1} not added. Max is at #${_maxCardPos + 1}`,
                                     );
-                                } else if (
-                                    posTypedDates[_completedChunkStart] !==
-                                    srsToday()
-                                ) {
-                                    // First completion today (within range).
-                                    // Auto-add the chunk to the deck if it has
-                                    // no card yet — first-time typing creates
-                                    // a learning-state card. Subsequent typings
-                                    // (or hotkey/auto-mistake-created cards)
-                                    // just get reviewed.
+                                } else {
+                                    // Within range. Auto-add the chunk to the
+                                    // deck if it has no card yet — first-time
+                                    // typing creates a learning-state card.
+                                    // Subsequent typings just get reviewed.
                                     if (!srsData[_completedChunkStart]) {
                                         srsAddCard(_completedChunkStart);
                                     }
                                     if (!currentChunkMistakePressed) {
-                                        srsRate(_completedChunkStart, 3, srsIsDue(_completedChunkStart)); // Good
-                                        srsUpdateBadge();
+                                        srsRate(_completedChunkStart, 3, null); // Good
                                     }
+                                    // Track block progress for the daily goal.
+                                    const _bn = blockForPos(
+                                        _completedChunkStart,
+                                    );
+                                    const _gs_z = getGroupSizeForMode(
+                                        getModeForPos(
+                                            _completedChunkStart + 1,
+                                        ),
+                                    );
+                                    blockProgress[_bn] =
+                                        (blockProgress[_bn] || 0) +
+                                        _gs_z;
+                                    // If the block is now fully typed,
+                                    // finalise it as a study block.
+                                    if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
+                                        const { start, end } = blockRange(_bn);
+                                        const _interval = 1;
+                                        studyBlockData[_bn] = {
+                                            start,
+                                            end,
+                                            dueDate: srsDaysFromNow(_interval),
+                                            interval: _interval,
+                                            easeFactor: 2.5,
+                                            reviews: 0,
+                                            lapses: 0,
+                                        };
+                                        syncBlockDueDates();
+                                        saveSettings();
+                                    }
+                                    srsUpdateBadge();
                                 }
                                 posTypedDates[_completedChunkStart] = srsToday();
                             }
@@ -2990,7 +3010,6 @@
 
                     // Find max daily stats for normalization
                     const maxDaily = Math.max(1, ...Object.values(dailyStats));
-                    const maxReviews = Math.max(1, ...Object.values(dailyReviewStats));
 
                     let cursor = new Date(gridStart);
                     for (let i = 0; i < totalDays; i++) {
@@ -3009,47 +3028,30 @@
                             cell.style.background = "transparent";
                             cell.style.cursor = "default";
                         } else if (isFuture) {
-                            // For "digits" mode, future squares show empty
-                            if (heatmapMode === "digits") {
+                            // Future: show due count from block schedule
+                            const dueCount = futureDueByDate[key] || 0;
+                            if (dueCount === 0) {
                                 cell.style.background = emptyColor;
                             } else {
-                                const dueCount = futureDueByDate[key] || 0;
-                                if (dueCount === 0) {
-                                    cell.style.background = emptyColor;
-                                } else {
-                                    const frac = Math.min(1, dueCount / maxFutureDue);
-                                    cell.style.background = lerpColor(futureDark, futureLight, frac);
-                                }
-                                const dateStr = cursor.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-                                if (dueCount > 0) {
-                                    cell.addEventListener("mouseenter", (e) => _showTooltip(e, `<b>${dueCount}</b> card${dueCount === 1 ? "" : "s"} due<br>${dateStr}`));
-                                    cell.addEventListener("mouseleave", _hideTooltip);
-                                } else {
-                                    cell.addEventListener("mouseenter", (e) => _showTooltip(e, `<b>No</b> cards due<br>${dateStr}`));
-                                    cell.addEventListener("mouseleave", _hideTooltip);
-                                }
+                                const frac = Math.min(1, dueCount / maxFutureDue);
+                                cell.style.background = lerpColor(futureDark, futureLight, frac);
+                            }
+                            const dateStr = cursor.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+                            if (dueCount > 0) {
+                                cell.addEventListener("mouseenter", (e) => _showTooltip(e, `<b>${dueCount}</b> digit${dueCount === 1 ? "" : "s"} due<br>${dateStr}`));
+                                cell.addEventListener("mouseleave", _hideTooltip);
+                            } else {
+                                cell.addEventListener("mouseenter", (e) => _showTooltip(e, `<b>No</b> digits due<br>${dateStr}`));
+                                cell.addEventListener("mouseleave", _hideTooltip);
                             }
                         } else {
                             const digitCount = dailyStats[key] || 0;
-                            const reviewCount = dailyReviewStats[key] || 0;
 
                             // Smooth gradient for digits: 0 = empty, goal = lightest
                             const dFrac = digitCount === 0 ? 0 : Math.min(1, digitCount / dailyGoal);
                             const dColor = digitCount === 0 ? emptyColor : lerpColor(pastDark, pastLight, dFrac);
 
-                            // Smooth gradient for reviews: normalize against max reviews
-                            const rFrac = reviewCount === 0 ? 0 : Math.min(1, reviewCount / maxReviews);
-                            const rColor = reviewCount === 0 ? emptyColor : lerpColor(pastDark, pastLight, rFrac);
-
-                            // Apply coloring based on mode
-                            if (heatmapMode === "digits") {
-                                cell.style.background = dColor;
-                            } else if (heatmapMode === "cards") {
-                                cell.style.background = rColor;
-                            } else {
-                                // "both" - diagonal split
-                                cell.style.background = `linear-gradient(135deg, ${dColor} 50%, ${rColor} 50%)`;
-                            }
+                            cell.style.background = dColor;
 
                             if (isToday) {
                                 cell.style.border = "1.5px solid var(--stats-text)";
@@ -3057,7 +3059,7 @@
                             }
 
                             const dateStr = cursor.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-                            const tipHtml = `<b>${digitCount}</b> digit${digitCount === 1 ? "" : "s"} typed<br><b>${reviewCount}</b> card${reviewCount === 1 ? "" : "s"} reviewed<br>${dateStr}`;
+                            const tipHtml = `<b>${digitCount}</b> digit${digitCount === 1 ? "" : "s"} typed<br>${dateStr}`;
                             cell.addEventListener("mouseenter", (e) => _showTooltip(e, tipHtml));
                             cell.addEventListener("mouseleave", _hideTooltip);
                         }
@@ -3548,48 +3550,154 @@
                     r.style.setProperty("--accent-soft", mixHex(accentColor, "#000000", 0.2));
                 }
 
+                // ── Study Block Active Goal ──
+                // Returns the total digits the user should type today
+                // (due blocks + new frontier) and how many they've typed
+                // within those blocks today.
+                function computeActiveGoal() {
+                    const today = srsToday();
+                    let goal = 0,
+                        progress = 0;
+                    // Due blocks
+                    for (const bnStr in studyBlockData) {
+                        const bn = parseInt(bnStr);
+                        const bd = studyBlockData[bn];
+                        if (bd.dueDate <= today) {
+                            goal += studyBlockSize;
+                            const typed = blockProgress[bn] || 0;
+                            progress += Math.min(typed, studyBlockSize);
+                        }
+                    }
+                    // New frontier: first block that either isn't in studyBlockData
+                    // or is incomplete. Walk from block 0 upward.
+                    let frontierBlock = null;
+                    let maxBlock = 0;
+                    for (const bnStr in studyBlockData) {
+                        maxBlock = Math.max(maxBlock, parseInt(bnStr));
+                    }
+                    // The frontier is the next block after the highest existing
+                    // block, or block 0 if there are none.
+                    const checkBlock = maxBlock + 1;
+                    const { start, end } = blockRange(checkBlock);
+                    goal += studyBlockSize;
+                    const typed = blockProgress[checkBlock] || 0;
+                    progress += Math.min(typed, studyBlockSize);
+                    return { goal, progress };
+                }
+
+                function renderChecklist() {
+                    const today = srsToday();
+                    const el = document.getElementById("blockChecklist");
+                    if (!el) return;
+                    // Collect due blocks
+                    const due = [];
+                    for (const bnStr in studyBlockData) {
+                        const bn = parseInt(bnStr);
+                        const bd = studyBlockData[bn];
+                        if (bd.dueDate <= today) due.push(bn);
+                    }
+                    due.sort((a, b) => a - b);
+                    // Find frontier block
+                    let max = 0;
+                    for (const bnStr in studyBlockData)
+                        max = Math.max(max, parseInt(bnStr));
+                    const frontier = max + 1;
+                    const { start: frStart } = blockRange(frontier);
+                    const hasContent = due.length > 0;
+                    el.style.display = hasContent ? "block" : "none";
+                    let html = "";
+                    for (const bn of due) {
+                        const typed = blockProgress[bn] || 0;
+                        const pct = Math.round(
+                            (typed / studyBlockSize) * 100,
+                        );
+                        html +=
+                            `<div class="checklist-item" data-block="${bn}" style="cursor:pointer;padding:2px 0;">` +
+                            (typed > 0 ? `◐` : `○`) +
+                            ` Block ${bn} (${bn * studyBlockSize}-${(bn + 1) * studyBlockSize - 1})` +
+                            (typed > 0
+                                ? ` · ${typed}/${studyBlockSize} (${pct}%)`
+                                : "") +
+                            `</div>`;
+                    }
+                    // Note about where add-new-chunks will start
+                    html +=
+                        `<div class="checklist-item frontier-item" data-action="add" style="cursor:pointer;padding:2px 0;">` +
+                        `+ Add new chunks (${frStart}-${frStart + studyBlockSize - 1})` +
+                        `</div>`;
+                    el.innerHTML = html;
+                    // Wire clicks
+                    el.querySelectorAll(".checklist-item").forEach((item) => {
+                        item.addEventListener("click", () => {
+                            const bn = item.dataset.block;
+                            if (bn) {
+                                const n = parseInt(bn);
+                                // Jump to chunk just before this block
+                                const { start } = blockRange(n);
+                                const target = Math.max(
+                                    0,
+                                    snapToGroupStart(start) -
+                                        getGroupSizeForMode(
+                                            getModeForPos(start + 1),
+                                        ),
+                                );
+                                piInput.value = PI_DIGITS.substr(0, target);
+                                sequenceStartIndex = 0;
+                                piInput.dispatchEvent(new Event("input"));
+                            } else {
+                                // Add new: jump to frontier
+                                const target = snapToGroupStart(frStart);
+                                piInput.value = PI_DIGITS.substr(0, target);
+                                sequenceStartIndex = 0;
+                                piInput.dispatchEvent(new Event("input"));
+                            }
+                            piInput.focus();
+                        });
+                    });
+                }
+
                 // Lightweight goal-bar update used during typing — updates progress bar
                 // and counter text without rebuilding the heatmap (which is expensive).
                 function updateGoalBarOnly() {
-                    const today = srsToday();
-                    const todayCount = dailyStats[today] || 0;
+                    renderChecklist();
+                    const { goal, progress } = computeActiveGoal();
                     const pct = Math.min(
                         100,
-                        Math.round((todayCount / dailyGoal) * 100),
+                        Math.round((progress / Math.max(1, goal)) * 100),
                     );
                     const el = (id) => document.getElementById(id);
                     if (el("statsTodayCount"))
                         el("statsTodayCount").textContent =
-                            `${todayCount} / ${dailyGoal}`;
+                            `${progress} / ${goal}`;
                     if (el("statsTodayBar"))
                         el("statsTodayBar").style.width = pct + "%";
                     if (el("goalCenterText"))
                         el("goalCenterText").textContent =
-                            `${todayCount} / ${dailyGoal}`;
+                            `${progress} / ${goal}`;
                     if (el("goalBottomLabel"))
                         el("goalBottomLabel").textContent =
-                            `${todayCount} / ${dailyGoal}`;
+                            `${progress} / ${goal}`;
                     if (el("mainProgressFill")) {
                         el("mainProgressFill").style.width = pct + "%";
                         el("mainProgressFill").classList.toggle(
                             "goal-reached",
-                            todayCount >= dailyGoal,
+                            progress >= goal && goal > 0,
                         );
                     }
                 }
 
                 function statsRefreshDisplay() {
                     const today = srsToday();
-                    const todayCount = dailyStats[today] || 0;
+                    const { goal, progress } = computeActiveGoal();
                     const pct = Math.min(
                         100,
-                        Math.round((todayCount / dailyGoal) * 100),
+                        Math.round((progress / Math.max(1, goal)) * 100),
                     );
                     const el = (id) => document.getElementById(id);
 
                     if (el("statsTodayCount"))
                         el("statsTodayCount").textContent =
-                            `${todayCount} / ${dailyGoal}`;
+                            `${progress} / ${goal}`;
                     if (el("statsTodayBar"))
                         el("statsTodayBar").style.width = pct + "%";
 
@@ -3644,15 +3752,6 @@
                         const nextBtn = document.getElementById("heatmapNextYear");
                         if (prevBtn) prevBtn.addEventListener("click", () => { heatmapViewYear--; renderHeatmap(); });
                         if (nextBtn) nextBtn.addEventListener("click", () => { heatmapViewYear++; renderHeatmap(); });
-
-                        // Heatmap mode radio buttons
-                        const modeRadios = document.querySelectorAll('input[name="heatmapMode"]');
-                        modeRadios.forEach(radio => {
-                            radio.addEventListener("change", (e) => {
-                                heatmapMode = e.target.value;
-                                renderHeatmap();
-                            });
-                        });
 
                         // Heatmap colour scheme dropdown
                         const schemeSel =
@@ -3782,6 +3881,101 @@
                     saveSettings();
                 }
 
+                // ── Study Blocks ──
+                function blockForPos(pos) {
+                    return Math.floor(pos / studyBlockSize);
+                }
+
+                function blockRange(blockNum) {
+                    const start = blockNum * studyBlockSize;
+                    return { start, end: start + studyBlockSize - 1 };
+                }
+
+                function blockDigest(blockNum) {
+                    const { start, end } = blockRange(blockNum);
+                    let digest = 0;
+                    let p = snapToGroupStart(start);
+                    while (p <= end) {
+                        if (srsData[p]) digest++;
+                        const m = getModeForPos(p + 1);
+                        const gs = getGroupSizeForMode(m);
+                        if (p + gs > end + 1) break;
+                        p += gs;
+                    }
+                    return digest;
+                }
+
+                function blockChunkCount(blockNum) {
+                    const { start, end } = blockRange(blockNum);
+                    let count = 0;
+                    let p = snapToGroupStart(start);
+                    while (p <= end) {
+                        const m = getModeForPos(p + 1);
+                        const gs = getGroupSizeForMode(m);
+                        if (p + gs > end + 1) break;
+                        count++;
+                        p += gs;
+                    }
+                    return count;
+                }
+
+                function isBlockComplete(blockNum) {
+                    return blockDigest(blockNum) >= blockChunkCount(blockNum);
+                }
+
+                function migrateStudyBlocks() {
+                    const blocks = {};
+                    for (const posStr in srsData) {
+                        const pos = parseInt(posStr);
+                        const bn = blockForPos(pos);
+                        if (!blocks[bn]) blocks[bn] = [];
+                        blocks[bn].push(pos);
+                    }
+                    for (const bn in blocks) {
+                        const n = parseInt(bn);
+                        if (isBlockComplete(n)) {
+                            const { start, end } = blockRange(n);
+                            // Find the most overdue chunk in the block
+                            let minDue = srsToday();
+                            for (const pos of blocks[bn]) {
+                                const c = srsData[pos];
+                                if (c.dueDate < minDue) minDue = c.dueDate;
+                            }
+                            // Stagger by block number so they spread naturally
+                            const interval = Math.max(1, n);
+                            studyBlockData[n] = {
+                                start, end,
+                                dueDate: srsDaysFromNow(interval),
+                                interval,
+                                easeFactor: 2.5,
+                                reviews: 0,
+                                lapses: 0,
+                            };
+                        }
+                    }
+                    // Sync block due dates to all chunks in each block
+                    syncBlockDueDates();
+                    studyBlocksMigrated = true;
+                }
+
+                function syncBlockDueDates() {
+                    for (const bnStr in studyBlockData) {
+                        const bn = parseInt(bnStr);
+                        const bd = studyBlockData[bn];
+                        const { start, end } = blockRange(bn);
+                        let p = snapToGroupStart(start);
+                        while (p <= end) {
+                            if (srsData[p]) {
+                                srsData[p].dueDate = bd.dueDate;
+                            }
+                            const m = getModeForPos(p + 1);
+                            const gs = getGroupSizeForMode(m);
+                            if (p + gs > end + 1) break;
+                            p += gs;
+                        }
+                    }
+                }
+
                 // SM-2 update: rating 1=Again 2=Hard 3=Good 4=Easy
                 // Cards in learning (step >= 0) work like Anki: Again resets to step 0,
                 // Good advances to next step, graduating when all steps are passed.
@@ -3853,12 +4047,6 @@
                     if (shouldCountNew && card.reviews === 0)
                         srsNewSeenToday++;
                     card.reviews++;
-                    if (shouldCountDaily) {
-                        // Track daily review count for the reviews heatmap
-                        const _today = srsToday();
-                        dailyReviewStats[_today] =
-                            (dailyReviewStats[_today] || 0) + 1;
-                    }
 
                     if (inReviewState) {
                         // ── Graduated card: SM-2 ──
@@ -5261,14 +5449,17 @@
                         piInput.focus();
                     };
                     document
-                        .getElementById("dailyGoalInput")
+                        .getElementById("studyBlockSizeInput")
                         .addEventListener("change", (e) => {
                             let v = parseInt(e.target.value);
                             if (isNaN(v) || v < 10) v = 10;
-                            dailyGoal = v;
+                            studyBlockSize = v;
+                            // Recalculate blocks with new size
+                            studyBlockData = {};
+                            migrateStudyBlocks();
                             e.target.value = v;
                             saveSettings();
-                            statsRefreshDisplay();
+                            updateGoalBarOnly();
                         });
                     document.getElementById("testSubmitBtn").onclick =
                         testSubmit;
@@ -6713,11 +6904,6 @@
                                     if (_undo.oldCard)
                                         srsData[_undo.pos] = _undo.oldCard;
                                     else delete srsData[_undo.pos];
-                                    if (_undo.isDue) {
-                                        const _today = srsToday();
-                                        if (dailyReviewStats[_today] > 0)
-                                            dailyReviewStats[_today]--;
-                                    }
                                     srsUpdateBadge();
                                     saveSettings();
                                     const _ratingLabel =
@@ -6755,11 +6941,6 @@
                                     if (_redo.newCard)
                                         srsData[_redo.pos] = _redo.newCard;
                                     else delete srsData[_redo.pos];
-                                    if (_redo.isDue) {
-                                        const _today = srsToday();
-                                        dailyReviewStats[_today] =
-                                            (dailyReviewStats[_today] || 0) + 1;
-                                    }
                                     srsUpdateBadge();
                                     saveSettings();
                                     const _ratingLabel =
@@ -7067,15 +7248,6 @@
                                         if (undo.oldCard)
                                             srsData[undo.pos] = undo.oldCard;
                                         else delete srsData[undo.pos];
-                                        // Undo the review stat increment
-                                        // only if the original rating counted
-                                        // as a review (i.e. the card was in the
-                                        // review deck at the time).
-                                        if (undo.countedAsReview) {
-                                            const _today = srsToday();
-                                            if (dailyReviewStats[_today] > 0)
-                                                dailyReviewStats[_today]--;
-                                        }
                                         srsUpdateBadge();
                                         saveSettings();
                                         const d = undo.digits || "chunk";
@@ -7123,13 +7295,6 @@
                                         if (redo.newCard)
                                             srsData[redo.pos] = redo.newCard;
                                         else delete srsData[redo.pos];
-                                        // Re-apply the review stat only if
-                                        // the original rating counted.
-                                        if (redo.countedAsReview) {
-                                            const _today = srsToday();
-                                            dailyReviewStats[_today] =
-                                                (dailyReviewStats[_today] || 0) + 1;
-                                        }
                                         srsUpdateBadge();
                                         saveSettings();
                                         const ratingLabel = redo.rating === 4 ? "Hard" : "Again";
@@ -7144,6 +7309,11 @@
 
                     initAudioContext();
                     loadSettings();
+                    // Migrate existing cards into study blocks (runs once)
+                    if (!studyBlocksMigrated) {
+                        migrateStudyBlocks();
+                        saveSettings();
+                    }
                     console.log("App Ready");
                     piInput.focus();
 
