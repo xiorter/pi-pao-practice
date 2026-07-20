@@ -4235,32 +4235,6 @@
 
                 // Per-day session tracking — prevents re-adding new cards on re-open
                 let srsNewSeenToday = 0; // how many new cards shown so far today
-                let _srsCountdownTimer = null;
-                function srsStartCountdown(isoDate) {
-                    if (_srsCountdownTimer) clearInterval(_srsCountdownTimer);
-                    const el = document.getElementById("srsNextDue");
-                    function update() {
-                        const now = new Date();
-                        const target = new Date(isoDate + "T00:00:00");
-                        const diff = target - now;
-                        if (diff <= 0) {
-                            el.textContent = "Cards available now — refresh!";
-                            clearInterval(_srsCountdownTimer);
-                            return;
-                        }
-                        const days = Math.floor(diff / 86400000);
-                        const hours = Math.floor((diff % 86400000) / 3600000);
-                        const mins = Math.floor((diff % 3600000) / 60000);
-                        const parts = [];
-                        if (days > 0) parts.push(`${days}d`);
-                        if (hours > 0) parts.push(`${hours}h`);
-                        parts.push(`${mins}m`);
-                        el.textContent = `Next card in ${parts.join(" ")}`;
-                    }
-                    update();
-                    _srsCountdownTimer = setInterval(update, 30000);
-                }
-
                 function srsGetSettings() {
                     return {
                         newPerDay:
@@ -5334,115 +5308,6 @@
                         });
                     }
 
-                    // SRS events
-//                     document.getElementById("srsRevealBtn").onclick = srsReveal;
-                    ["srsAgain", "srsHard", "srsGood", "srsEasy"].forEach(
-                        (id, i) => {
-                            document.getElementById(id).onclick = () => {
-                                const pos = srsQueue[srsQueueIndex];
-                                // Save snapshot for undo
-                                srsHistory.push({
-                                    pos,
-                                    queueIndex: srsQueueIndex,
-                                    sessionDone: srsSessionDone,
-                                    oldCard: srsData[pos]
-                                        ? { ...srsData[pos] }
-                                        : null,
-                                    queueSnapshot: [...srsQueue],
-                                });
-                                srsRate(pos, i + 1, true);
-                                srsSessionDone++;
-                                srsQueueIndex++;
-                                // If rated Again or if card is still in learning (step >= 0), re-add to end of queue
-                                const updatedCard = srsData[pos];
-                                if (
-                                    updatedCard &&
-                                    updatedCard.interval <= 0 &&
-                                    updatedCard.dueDate <= srsToday()
-                                ) {
-                                    // Card is still in learning — add back 10 positions ahead or at end (whichever comes first), Anki-style
-                                    const reinsertAt = Math.min(
-                                        srsQueueIndex + 10,
-                                        srsQueue.length,
-                                    );
-                                    srsQueue.splice(reinsertAt, 0, pos);
-                                }
-                                srsShowCard();
-                            };
-                        },
-                    );
-                    document.getElementById("srsSettingsBackArrow").onclick =
-                        () => {
-                            // Save raw mode, close sub-modal, stay in SRS
-                            const rmEl = document.getElementById("srsRawMode");
-                            if (rmEl) {
-                                srsRawMode = rmEl.checked;
-                                saveSettings();
-                            }
-                            document.getElementById(
-                                "srsSettingsModal",
-                            ).style.display = "none";
-                        };
-                    document.getElementById("srsSettingsClose").onclick =
-                        () => {
-                            const rmEl = document.getElementById("srsRawMode");
-                            if (rmEl) {
-                                srsRawMode = rmEl.checked;
-                                saveSettings();
-                            }
-                            document.getElementById(
-                                "srsSettingsModal",
-                            ).style.display = "none";
-                            piInput.focus();
-                        };
-                    document.getElementById("srsBackArrow").onclick = () => {
-                        if (_srsCountdownTimer)
-                            clearInterval(_srsCountdownTimer);
-                        imagesModal.style.display = "block";
-                        displayList(true);
-                    };
-                    document.getElementById("srsClose").onclick = () => {
-                        if (_srsCountdownTimer)
-                            clearInterval(_srsCountdownTimer);
-                        piInput.focus();
-                    };
-                    document.addEventListener("keydown", (e) => {
-                        const revealed =
-                            document.getElementById("srsBack").style.display !==
-                            "none";
-                        if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-                            e.preventDefault();
-                            if (srsHistory.length > 0) {
-                                const snap = srsHistory.pop();
-                                if (snap.oldCard)
-                                    srsData[snap.pos] = snap.oldCard;
-                                else delete srsData[snap.pos];
-                                srsQueueIndex = snap.queueIndex;
-                                srsSessionDone = snap.sessionDone;
-                                if (snap.queueSnapshot)
-                                    srsQueue = snap.queueSnapshot;
-                                saveSettings();
-                                srsShowCard();
-                            }
-                            return;
-                        }
-                        if (
-                            (e.code === "Space" || e.key === "Enter") &&
-                            !revealed
-                        ) {
-                            e.preventDefault();
-                            srsReveal();
-                        } else if (revealed) {
-                            if (e.key === "1")
-                                document.getElementById("srsAgain").click();
-                            else if (e.key === "2" || e.key.toUpperCase() === hardHotkey)
-                                document.getElementById("srsHard").click();
-                            else if (e.key === "3")
-                                document.getElementById("srsGood").click();
-                            else if (e.key === "4")
-                                document.getElementById("srsEasy").click();
-                        }
-                    });
                     srsUpdateBadge();
 
                     // ── Firebase Sync UI wiring ──
@@ -6671,7 +6536,7 @@
                                     showImageLogic();
                                 }
                                 // Review hotkey: directly open SRS modal
-                                if (e.key.toUpperCase() === reviewHotkey) {
+                                if (false && e.key.toUpperCase() === reviewHotkey) {
                                     e.preventDefault();
                                     srsOpenModal();
                                 }
