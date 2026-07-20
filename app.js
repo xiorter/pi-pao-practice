@@ -1305,6 +1305,19 @@
                         isReviewMode = s.isReviewMode ?? false;
                         studyBlockSize = s.studyBlockSize ?? 25;
                         studyBlockData = s.studyBlockData || {};
+                        // One-time shift: bring all blocks 1 day sooner
+                        if (!s._blocksShifted) {
+                            for (const bn in studyBlockData) {
+                                const d = new Date(studyBlockData[bn].dueDate + "T00:00:00");
+                                d.setDate(d.getDate() - 1);
+                                const y = d.getFullYear();
+                                const m = String(d.getMonth() + 1).padStart(2, "0");
+                                const dd = String(d.getDate()).padStart(2, "0");
+                                studyBlockData[bn].dueDate = `${y}-${m}-${dd}`;
+                            }
+                            syncBlockDueDates();
+                            saveSettings();
+                        }
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
                         currentScale = s.currentScale || "major";
@@ -1737,6 +1750,7 @@
                         studyBlockData,
                         studyBlocksMigrated,
                         blockProgress,
+                        "_blocksShifted": true,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -3083,22 +3097,29 @@
                     // Compute cells per block for grid layout
                     const _perBlock = studyBlockSize;
                     // Grid has one auto-width column for block labels,
-                    // then _perBlock equal-width columns for cells.
+                    // then _perBlock fixed-width columns for cells.
                     container.style.cssText =
-                        `display:grid;grid-template-columns:auto repeat(${Math.max(1, _perBlock)},1fr);gap:2px;width:max-content;`;
+                        `display:grid;grid-template-columns:auto repeat(${Math.max(1, _perBlock)},12px);gap:2px;width:max-content;`;
 
                     let currentBlock = -1;
+                    let cellsInRow = 0;
                     let p = 0;
                     while (p <= maxPos && p < PI_DIGITS.length) {
-                        // If we've entered a new study block, insert a label cell
-                        // in column 1. The grid will auto-place the following
-                        // _perBlock cells in columns 2.._perBlock+1, then wrap.
                         const _cellBlock = blockForPos(p);
                         if (_cellBlock !== currentBlock) {
+                            // Pad incomplete row with empty cells
+                            if (cellsInRow > 0 && cellsInRow < _perBlock) {
+                                for (let _e = cellsInRow; _e < _perBlock; _e++) {
+                                    const _pad = document.createElement("div");
+                                    _pad.style.cssText = "width:12px;height:12px;visibility:hidden;";
+                                    container.appendChild(_pad);
+                                }
+                            }
                             currentBlock = _cellBlock;
+                            cellsInRow = 0;
                             const _bd = studyBlockData[currentBlock];
                             const _today = srsToday();
-                            let label = `${currentBlock + 1}`;
+                            let label = `${currentBlock + 1} \u2502`;
                             if (_bd) {
                                 if (_bd.dueDate < _today) {
                                     const over = Math.round(
@@ -3131,6 +3152,7 @@
                                 "font-size:0.55rem;color:#888;white-space:nowrap;padding-right:2px;display:flex;align-items:center;height:12px;";
                             container.appendChild(_labelCell);
                         }
+                        cellsInRow++;
                         const cellPos = p; // capture current position for closures
                         const mode = getModeForPos(p + 1);
                         const gs = getGroupSizeForMode(mode);
