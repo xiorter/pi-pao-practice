@@ -1305,19 +1305,6 @@
                         isReviewMode = s.isReviewMode ?? false;
                         studyBlockSize = s.studyBlockSize ?? 25;
                         studyBlockData = s.studyBlockData || {};
-                        // One-time shift: bring all blocks 1 day sooner
-                        if (!s._blocksShifted) {
-                            for (const bn in studyBlockData) {
-                                const d = new Date(studyBlockData[bn].dueDate + "T00:00:00");
-                                d.setDate(d.getDate() - 1);
-                                const y = d.getFullYear();
-                                const m = String(d.getMonth() + 1).padStart(2, "0");
-                                const dd = String(d.getDate()).padStart(2, "0");
-                                studyBlockData[bn].dueDate = `${y}-${m}-${dd}`;
-                            }
-                            syncBlockDueDates();
-                            saveSettings();
-                        }
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
                         currentScale = s.currentScale || "major";
@@ -3339,6 +3326,14 @@
                         container.appendChild(cell);
                         p += gs;
                     }
+                    // Pad the last block's incomplete row
+                    if (cellsInRow > 0 && cellsInRow < _perBlock) {
+                        for (let _e = cellsInRow; _e < _perBlock; _e++) {
+                            const _pad = document.createElement("div");
+                            _pad.style.cssText = "width:12px;height:12px;visibility:hidden;";
+                            container.appendChild(_pad);
+                        }
+                    }
 
                     // Update stats display (Due mode only)
                     // Update stats display (always visible, in both modes)
@@ -3651,10 +3646,15 @@
                             `</div>`;
                     }
                     // Note about where add-new-chunks will start
-                    const { start: _frS, end: _frE } = blockRange(frontier);
+                    const { end: _frE } = blockRange(frontier);
+                    // Start the frontier range at the next untyped digit
+                    const _srsPos = Object.keys(srsData).map(Number);
+                    const _maxPos = _srsPos.length > 0 ? Math.max(..._srsPos) + 1 : 1;
                     html +=
-                        `<div class="checklist-item frontier-item" data-action="add" style="cursor:pointer;padding:2px 0;">` +
-                        `+ Add new chunks (${_frS + 1}-${_frE + 1})` +
+                        `<div class="checklist-item ` +
+                        (due.length > 0 ? `frontier-item` : ``) +
+                        `" data-action="add" style="cursor:pointer;padding:2px 0;">` +
+                        `+ Add new chunks (${_maxPos + 1}-${_frE + 1})` +
                         `</div>`;
                     el.innerHTML = html;
                     // Wire clicks
@@ -3677,8 +3677,7 @@
                                 );
                             } else {
                                 // Add new: jump to frontier
-                                const { start } = blockRange(frontier);
-                                const target = snapToGroupStart(start);
+                                const target = snapToGroupStart(_maxPos);
                                 piInput.value = PI_DIGITS.substr(0, target);
                                 sequenceStartIndex = 0;
                                 piInput.dispatchEvent(
@@ -6777,6 +6776,19 @@
                     // Migrate existing cards into study blocks (runs once)
                     if (!studyBlocksMigrated) {
                         migrateStudyBlocks();
+                        saveSettings();
+                    }
+                    // One-time shift: bring all blocks 1 day sooner
+                    if (!s._blocksShifted) {
+                        for (const bn in studyBlockData) {
+                            const d = new Date(studyBlockData[bn].dueDate + "T00:00:00");
+                            d.setDate(d.getDate() - 1);
+                            const y = d.getFullYear();
+                            const m = String(d.getMonth() + 1).padStart(2, "0");
+                            const dd = String(d.getDate()).padStart(2, "0");
+                            studyBlockData[bn].dueDate = `${y}-${m}-${dd}`;
+                        }
+                        syncBlockDueDates();
                         saveSettings();
                     }
                     console.log("App Ready");

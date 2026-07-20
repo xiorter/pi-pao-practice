@@ -1728,7 +1728,7 @@ input[type="number"] {
     position: fixed;
     left: 12px;
     top: 60px;
-    width: 180px;
+    width: 220px;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
     display: none;
