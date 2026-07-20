@@ -3762,17 +3762,17 @@
                     // Center top-bar goal text (styled like position display)
                     if (el("goalCenterText"))
                         el("goalCenterText").textContent =
-                            `${todayCount} / ${dailyGoal}`;
+                            `${progress} / ${goal}`;
                     // Bottom label (only visible when bar is at bottom and not hidden)
                     if (el("goalBottomLabel"))
                         el("goalBottomLabel").textContent =
-                            `${todayCount} / ${dailyGoal}`;
+                            `${progress} / ${goal}`;
                     // Main-page progress bar fill
                     if (el("mainProgressFill")) {
                         el("mainProgressFill").style.width = pct + "%";
                         el("mainProgressFill").classList.toggle(
                             "goal-reached",
-                            todayCount >= dailyGoal,
+                            progress >= goal && goal > 0,
                         );
                     }
 
@@ -5392,42 +5392,7 @@
                             };
                         }
                     }
-
-                    document.getElementById("srsAddRangeBtn").onclick = () => {
-                        const fromPos = parseInt(
-                            document.getElementById("srsAddFrom").value,
-                        );
-                        const toPos = parseInt(
-                            document.getElementById("srsAddTo").value,
-                        );
-                        if (
-                            isNaN(fromPos) ||
-                            isNaN(toPos) ||
-                            fromPos >= toPos
-                        ) {
-                            alert("Enter a valid range (From < To).");
-                            return;
-                        }
-                        let added = 0;
-                        let pos = snapToGroupStart(fromPos - 1);
-                        const endPos = toPos - 1;
-                        while (pos <= endPos && pos < PI_DIGITS.length) {
-                            const mode = getModeForPos(pos + 1);
-                            const gSize = getGroupSizeForMode(mode);
-                            if (pos + gSize > PI_DIGITS.length) break;
-                            if (!srsData[pos]) {
-                                srsAddCard(pos);
-                                added++;
-                            }
-                            pos += gSize;
-                        }
-                        saveSettings();
-                        srsUpdateBadge();
-                        displayList(false);
-                        alert(
-                            `Added ${added} new card${added !== 1 ? "s" : ""} to SRS (${fromPos}–${toPos}).`,
-                        );
-                    };
+                    // ── Excel Upload ──
 
                     practiceSeekImg.oninput = (e) => {
                         let v = parseInt(e.target.value);
