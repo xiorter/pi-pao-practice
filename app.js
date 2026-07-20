@@ -1258,13 +1258,7 @@
                         excelColumnConfig =
                             s.excelColumnConfig || excelColumnConfig;
                         srsData = s.srsData || {};
-                        srsSessionDate = s.srsSessionDate || "";
                         srsNewSeenToday = s.srsNewSeenToday || 0;
-                        // Reset session counter if it's a new day
-                        if (srsSessionDate !== srsToday()) {
-                            srsSessionDate = "";
-                            srsNewSeenToday = 0;
-                        }
                         const _sv = (id, val) => {
                             const el = document.getElementById(id);
                             if (el && val !== undefined) el.value = val;
@@ -1654,7 +1648,6 @@
                         excelObjectList,
                         excelColumnConfig,
                         srsData,
-                        srsSessionDate,
                         srsNewSeenToday,
                         srsNewPerDay:
                             parseInt(
@@ -4198,187 +4191,8 @@
                 // SRS REVIEW UI
                 // ═══════════════════════════════════════════
 
-                let srsQueue = [];
-                let srsQueueIndex = 0;
-                let srsSessionDone = 0;
-                let srsHistory = []; // { pos, oldCard } for undo
                 // Per-day session tracking — prevents re-adding new cards on re-open
-                let srsSessionDate = ""; // which day this session belongs to
                 let srsNewSeenToday = 0; // how many new cards shown so far today
-
-                function srsRenderPAO(containerEl, imagesEl, d) {
-                    // PAO row
-                    containerEl.innerHTML = `
-                        <div class="srs-pao-item">
-                            <span class="srs-pao-term">${d.pTerm}</span>
-                            <span class="srs-pao-num">${d.pNum}</span>
-                        </div>
-                        <div class="srs-pao-item">
-                            <span class="srs-pao-term">${d.aTerm}</span>
-                            <span class="srs-pao-num">${d.aNum}</span>
-                        </div>
-                        <div class="srs-pao-item">
-                            <span class="srs-pao-term">${d.oTerm}</span>
-                            <span class="srs-pao-num">${d.oNum}</span>
-                        </div>
-                    `;
-                    // Inline images
-                    imagesEl.innerHTML = "";
-                    const pEntry = lookupAnkiEntry(d.pNum);
-                    const oEntry = lookupAnkiEntry(d.oNum);
-                    const pSrc = pEntry ? getImgSrc(pEntry.personSrc) : null;
-                    const oSrc = oEntry ? getImgSrc(oEntry.objectSrc) : null;
-                    if (pSrc) {
-                        const img = document.createElement("img");
-                        img.src = pSrc;
-                        img.alt = d.pTerm;
-                        img.onerror = () => img.remove();
-                        imagesEl.appendChild(img);
-                    }
-                    if (oSrc) {
-                        const img = document.createElement("img");
-                        img.src = oSrc;
-                        img.alt = d.oTerm;
-                        img.onerror = () => img.remove();
-                        imagesEl.appendChild(img);
-                    }
-                    if (!pSrc && !oSrc) imagesEl.style.display = "none";
-                    else imagesEl.style.display = "flex";
-                }
-
-                function srsShowCard() {
-                    const pos = srsQueue[srsQueueIndex];
-                    if (pos === undefined) {
-                        srsUpdateBadge();
-                        srsShowEmpty();
-                        return;
-                    }
-                    document.getElementById("srsActive").style.display =
-                        "block";
-                    document.getElementById("srsEmpty").style.display = "none";
-
-                    // Progress: count remaining by category
-                    const remaining = srsQueue.slice(srsQueueIndex);
-                    let nNew = 0,
-                        nLearn = 0,
-                        nReview = 0;
-                    remaining.forEach((p) => {
-                        const card = srsData[p];
-                        if (!card || card.reviews === 0) nNew++;
-                        // Learning: card is in learning steps (step >= 0, not yet graduated)
-                        // Review: card has graduated (step < 0 or undefined, has a real interval)
-                        else if (card.step !== undefined && card.step >= 0) nLearn++;
-                        else nReview++;
-                    });
-                    document.getElementById("srsCountNew").textContent = nNew;
-                    document.getElementById("srsCountLearn").textContent =
-                        nLearn;
-                    document.getElementById("srsCountReview").textContent =
-                        nReview;
-
-                    // Underline the type that the current card belongs to
-                    const card = srsData[pos];
-                    const cardType =
-                        !card || card.reviews === 0
-                            ? "new"
-                            : card.step !== undefined && card.step >= 0
-                              ? "learn"
-                              : "review";
-                    ["srsCountNew", "srsCountLearn", "srsCountReview"].forEach(
-                        (id) => {
-                            document.getElementById(id).style.textDecoration =
-                                "none";
-                        },
-                    );
-                    const underlineId =
-                        cardType === "new"
-                            ? "srsCountNew"
-                            : cardType === "learn"
-                              ? "srsCountLearn"
-                              : "srsCountReview";
-                    document.getElementById(underlineId).style.textDecoration =
-                        "underline";
-
-                    const mode = getModeForPos(pos + 1);
-                    const gSize = getGroupSizeForMode(mode);
-                    const prevPos = pos - gSize;
-                    const prevMode = getModeForPos(prevPos + 1);
-                    const groupNum = posToGroupNum(pos) + 1;
-                    const rawMode =
-                        document.getElementById("srsRawMode")?.checked ??
-                        srsRawMode;
-
-                    // FRONT META: position and image num (hidden in raw mode)
-                    document.getElementById("srsFrontMeta").textContent =
-                        rawMode
-                            ? ""
-                            : prevPos >= 0
-                              ? `IMAGE ${posToGroupNum(prevPos) + 1}  ·  POSITION ${prevPos + 1}`
-                              : "(start of sequence)";
-                    if (prevPos >= 0) {
-                        const prevD = getPAOGroupDataByPos(prevPos, prevMode);
-                        srsRenderPAO(
-                            document.getElementById("srsFrontPAO"),
-                            document.getElementById("srsFrontImages"),
-                            prevD,
-                        );
-                    } else {
-                        document.getElementById("srsFrontPAO").innerHTML =
-                            `<div style="color:#aaa;font-size:0.9rem;padding:8px 0;">This is the first chunk — no predecessor.</div>`;
-                        document.getElementById("srsFrontImages").innerHTML =
-                            "";
-                    }
-
-                    // BACK META: hidden in raw mode
-                    document.getElementById("srsBackMeta").textContent = rawMode
-                        ? ""
-                        : `IMAGE ${groupNum}  ·  POSITION ${pos + 1}`;
-                    const d = getPAOGroupDataByPos(pos, mode);
-                    srsRenderPAO(
-                        document.getElementById("srsBackPAO"),
-                        document.getElementById("srsBackImages"),
-                        d,
-                    );
-
-                    // Reset reveal state
-                    document.getElementById("srsFront").style.display = "block";
-                    document.getElementById("srsBack").style.display = "none";
-                    document.getElementById("srsRevealBtn").style.display =
-                        "block";
-                    document
-                        .getElementById("srsRatingRow")
-                        .classList.remove("visible");
-
-                    // Update next-interval preview on buttons
-                    [1, 2, 3, 4].forEach((r) => {
-                        const iv = srsNextInterval(pos, r);
-                        const ids = [
-                            "srsAgainDays",
-                            "srsHardDays",
-                            "srsGoodDays",
-                            "srsEasyDays",
-                        ];
-                        const label =
-                            typeof iv === "string"
-                                ? iv
-                                : iv === 1
-                                  ? "1 day"
-                                  : `${iv} days`;
-                        document.getElementById(ids[r - 1]).textContent = label;
-                    });
-                }
-
-                function srsReveal() {
-                    // Swap: hide front content, show back in its place
-                    document.getElementById("srsFront").style.display = "none";
-                    document.getElementById("srsBack").style.display = "block";
-                    document.getElementById("srsRevealBtn").style.display =
-                        "none";
-                    document
-                        .getElementById("srsRatingRow")
-                        .classList.add("visible");
-                }
-
                 let _srsCountdownTimer = null;
                 function srsStartCountdown(isoDate) {
                     if (_srsCountdownTimer) clearInterval(_srsCountdownTimer);
@@ -4442,195 +4256,6 @@
                                 ?.value || "due-random",
                     };
                 }
-
-                function srsBuildQueue() {
-                    const today = srsToday();
-                    const cfg = srsGetSettings();
-
-                    // Reset day counter if new day
-                    if (srsSessionDate !== today) {
-                        srsSessionDate = today;
-                        srsNewSeenToday = 0;
-                    }
-
-                    const newRemaining = Math.max(
-                        0,
-                        cfg.newPerDay - srsNewSeenToday,
-                    );
-
-                    // All due cards split by category
-                    let allDueNew = Object.entries(srsData).filter(
-                        ([, v]) => v.dueDate <= today && v.reviews === 0,
-                    );
-                    let allDueReview = Object.entries(srsData).filter(
-                        ([, v]) =>
-                            v.dueDate <= today &&
-                            v.reviews > 0 &&
-                            v.interval > 0 &&
-                            (v.step === undefined || v.step < 0),
-                    );
-
-                    // Insertion order for new cards
-                    if (cfg.insertionOrder === "sequential") {
-                        allDueNew.sort(([a], [b]) => parseInt(a) - parseInt(b));
-                    } else {
-                        // Random
-                        for (let i = allDueNew.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [allDueNew[i], allDueNew[j]] = [
-                                allDueNew[j],
-                                allDueNew[i],
-                            ];
-                        }
-                    }
-
-                    // Review sort order
-                    if (cfg.reviewSortOrder === "due-random") {
-                        allDueReview.sort(([, a], [, b]) => {
-                            if (a.dueDate !== b.dueDate)
-                                return a.dueDate.localeCompare(b.dueDate);
-                            return Math.random() - 0.5;
-                        });
-                    } else if (cfg.reviewSortOrder === "due") {
-                        allDueReview.sort(([, a], [, b]) =>
-                            a.dueDate.localeCompare(b.dueDate),
-                        );
-                    } else if (cfg.reviewSortOrder === "random") {
-                        for (let i = allDueReview.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [allDueReview[i], allDueReview[j]] = [
-                                allDueReview[j],
-                                allDueReview[i],
-                            ];
-                        }
-                    }
-
-                    const limitedNew = allDueNew
-                        .slice(0, newRemaining)
-                        .map(([k]) => parseInt(k));
-                    const limitedReviews = allDueReview
-                        .slice(0, cfg.maxReviews)
-                        .map(([k]) => parseInt(k));
-
-                    let queue;
-                    if (cfg.newReviewOrder === "new-first") {
-                        queue = [...limitedNew, ...limitedReviews];
-                    } else if (cfg.newReviewOrder === "review-first") {
-                        queue = [...limitedReviews, ...limitedNew];
-                    } else {
-                        // Mix: interleave new into reviews
-                        queue = [];
-                        const step =
-                            limitedNew.length > 0
-                                ? Math.max(
-                                      1,
-                                      Math.floor(
-                                          limitedReviews.length /
-                                              limitedNew.length,
-                                      ),
-                                  )
-                                : Infinity;
-                        let ri = 0,
-                            ni = 0;
-                        while (
-                            ri < limitedReviews.length ||
-                            ni < limitedNew.length
-                        ) {
-                            for (
-                                let s = 0;
-                                s < step && ri < limitedReviews.length;
-                                s++
-                            )
-                                queue.push(limitedReviews[ri++]);
-                            if (ni < limitedNew.length)
-                                queue.push(limitedNew[ni++]);
-                        }
-                    }
-
-                    return queue;
-                }
-
-                function srsShowEmpty() {
-                    document.getElementById("srsActive").style.display = "none";
-                    document.getElementById("srsEmpty").style.display = "block";
-                    const next = Object.values(srsData)
-                        .map((c) => c.dueDate)
-                        .sort()[0];
-                    if (next && next > srsToday()) {
-                        srsStartCountdown(next);
-                    } else if (next) {
-                        // Cards exist with dueDate <= today, but check if a new session
-                        // would actually have anything (daily limits may be exhausted)
-                        const newQueue = srsBuildQueue();
-                        if (newQueue.length > 0) {
-                            document.getElementById("srsNextDue").textContent =
-                                "Cards available — open a new session!";
-                        } else {
-                            document.getElementById("srsNextDue").textContent =
-                                "All done for today! 🎉";
-                        }
-                    } else {
-                        document.getElementById("srsNextDue").textContent = "";
-                    }
-                }
-
-                let srsQueueBuildSettings = null; // cached settings fingerprint
-
-                function srsOpenModal() {
-                    // Migrate any learning cards that have been reviewed at
-                    // least once. Before the fix these appeared in the review
-                    // queue but showed empty in pi coverage. After migration
-                    // they turn coloured and use the normal SM-2 schedule.
-                    // This is idempotent: already-graduated cards don't match
-                    // the condition.
-                    let _migrated = 0;
-                    for (const posStr in srsData) {
-                        const c = srsData[posStr];
-                        if (
-                            c.reviews > 0 &&
-                            c.step !== undefined &&
-                            c.step >= 0 &&
-                            c.interval <= 0
-                        ) {
-                            c.step = -1;
-                            c.interval = 1;
-                            c.dueDate = srsToday();
-                            _migrated++;
-                        }
-                    }
-                    if (_migrated > 0) {
-                        saveSettings();
-                        srsUpdateBadge();
-                    }
-                    const curCfg = srsGetSettings();
-                    const curFingerprint = JSON.stringify(curCfg);
-                    // Rebuild if date changed, queue empty, or settings changed (e.g. newPerDay)
-                    if (
-                        srsQueue.length === 0 ||
-                        srsSessionDate !== srsToday() ||
-                        srsQueueBuildSettings !== curFingerprint
-                    ) {
-                        srsQueue = srsBuildQueue();
-                        srsQueueBuildSettings = curFingerprint;
-                    }
-                    srsQueueIndex = 0;
-                    srsSessionDone = 0;
-                    srsHistory = [];
-
-                    srsModal.style.display = "block";
-                    imagesModal.style.display = "none";
-
-                    if (srsQueue.length === 0) {
-                        srsShowEmpty();
-                    } else {
-                        document.getElementById("srsEmpty").style.display =
-                            "none";
-                        document.getElementById("srsActive").style.display =
-                            "block";
-                        srsShowCard();
-                    }
-                }
-
                 function srsUpdateBadge() {
                     const n = srsDueCount();
                     const badge = document.getElementById("srsDueBadge");
@@ -5668,9 +5293,7 @@
                     }
 
                     // SRS events
-                    document.getElementById("openSRSButton").onclick =
-                        srsOpenModal;
-                    document.getElementById("srsRevealBtn").onclick = srsReveal;
+//                     document.getElementById("srsRevealBtn").onclick = srsReveal;
                     ["srsAgain", "srsHard", "srsGood", "srsEasy"].forEach(
                         (id, i) => {
                             document.getElementById(id).onclick = () => {
@@ -5706,15 +5329,6 @@
                             };
                         },
                     );
-                    document.getElementById("srsSettingsBtn").onclick = () => {
-                        // Show SRS settings as a separate sub-modal over the review screen
-                        document.getElementById(
-                            "srsSettingsModal",
-                        ).style.display = "block";
-                        // Sync raw mode checkbox to current state
-                        const rmEl = document.getElementById("srsRawMode");
-                        if (rmEl) rmEl.checked = srsRawMode;
-                    };
                     document.getElementById("srsSettingsBackArrow").onclick =
                         () => {
                             // Save raw mode, close sub-modal, stay in SRS
@@ -5737,24 +5351,20 @@
                             document.getElementById(
                                 "srsSettingsModal",
                             ).style.display = "none";
-                            srsModal.style.display = "none";
                             piInput.focus();
                         };
                     document.getElementById("srsBackArrow").onclick = () => {
                         if (_srsCountdownTimer)
                             clearInterval(_srsCountdownTimer);
-                        srsModal.style.display = "none";
                         imagesModal.style.display = "block";
                         displayList(true);
                     };
                     document.getElementById("srsClose").onclick = () => {
                         if (_srsCountdownTimer)
                             clearInterval(_srsCountdownTimer);
-                        srsModal.style.display = "none";
                         piInput.focus();
                     };
                     document.addEventListener("keydown", (e) => {
-                        if (srsModal.style.display !== "block") return;
                         const revealed =
                             document.getElementById("srsBack").style.display !==
                             "none";
@@ -6709,30 +6319,9 @@
 
                         const statsModalEl =
                             document.getElementById("statsModal");
-                        const srsSettingsModalEl =
-                            document.getElementById("srsSettingsModal");
 
                         if (e.key === "Escape") {
-                            if (
-                                srsSettingsModalEl &&
-                                srsSettingsModalEl.style.display === "block"
-                            ) {
-                                const rmEl =
-                                    document.getElementById("srsRawMode");
-                                if (rmEl) {
-                                    srsRawMode = rmEl.checked;
-                                    saveSettings();
-                                }
-                                srsSettingsModalEl.style.display = "none";
-                            } else if (srsModal.style.display === "block") {
-                                if (_srsCountdownTimer)
-                                    clearInterval(_srsCountdownTimer);
-                                srsModal.style.display = "none";
-                                imagesModal.style.display = "block";
-                                displayList(true);
-                            } else if (
-                                practiceModal.style.display === "block"
-                            ) {
+                            if (practiceModal.style.display === "block") {
                                 practiceModal.style.display = "none";
                                 imagesModal.style.display = "block";
                                 displayList(true);
@@ -6963,7 +6552,6 @@
                                 srsModal,
                                 everestModal,
                                 statsModalEl,
-                                srsSettingsModalEl,
                             ].some((m) => m && m.style.display === "block");
 
                             // Stats hotkey: toggle open/close
@@ -6994,11 +6582,11 @@
                             // Review hotkey toggle: R closes SRS modal if it's open
                             if (
                                 !anyModalOpen ||
-                                srsModal.style.display === "block"
+                                false
                             ) {
                                 if (
                                     e.key.toUpperCase() === reviewHotkey &&
-                                    srsModal.style.display === "block"
+                                    false
                                 ) {
                                     e.preventDefault();
                                     if (_srsCountdownTimer)
@@ -7225,8 +6813,7 @@
                                 // Ctrl+Z to undo last outside-SRS mistake
                                 if (
                                     (e.ctrlKey || e.metaKey) &&
-                                    e.key === "z" &&
-                                    !srsModal.style.display.includes("block")
+                                    e.key === "z"
                                 ) {
                                     e.preventDefault();
                                     if (mistakeUndoStack.length > 0) {
@@ -7260,8 +6847,7 @@
                                 // Ctrl+Y to redo a mistake undo
                                 if (
                                     (e.ctrlKey || e.metaKey) &&
-                                    e.key === "y" &&
-                                    !srsModal.style.display.includes("block")
+                                    e.key === "y"
                                 ) {
                                     e.preventDefault();
                                     if (mistakeRedoStack.length > 0) {
