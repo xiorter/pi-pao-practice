@@ -1749,7 +1749,6 @@ input[type="number"] {
     transition: opacity 0.12s;
 }
 #blockChecklist .checklist-item:hover {
-    text-decoration: underline;
     opacity: 0.85;
 }
 #blockChecklist .frontier-item {

@@ -3032,6 +3032,14 @@
                             const tipHtml = `<b>${digitCount}</b> digit${digitCount === 1 ? "" : "s"} typed<br>${dateStr}`;
                             cell.addEventListener("mouseenter", (e) => _showTooltip(e, tipHtml));
                             cell.addEventListener("mouseleave", _hideTooltip);
+                            // Right-click to reset digit count for this day
+                            cell.addEventListener("contextmenu", (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                delete dailyStats[key];
+                                saveSettings();
+                                renderHeatmap();
+                            });
                         }
 
                         grid.appendChild(cell);
@@ -3156,9 +3164,20 @@
                                 if (!menu) return;
                                 const _bd = studyBlockData[_thisBlock];
                                 const _h = menu.querySelector(".pi-context-header");
-                                if (_h) _h.textContent = `Block ${_thisBlock + 1} — due in ?`;
+                                if (_h) _h.textContent = `Block ${_thisBlock + 1}`;
                                 const _info = menu.querySelector(".pi-context-info");
-                                if (_info) _info.textContent = _bd ? `Due: ${srsFormatDate(_bd.dueDate)}` : "Not scheduled";
+                                if (_info) {
+                                    if (_bd) {
+                                        const _dueMs = new Date(_bd.dueDate + "T00:00:00");
+                                        const _todayMs = new Date(srsToday() + "T00:00:00");
+                                        const _diff = Math.round((_dueMs - _todayMs) / 86400000);
+                                        if (_diff < 0) { _info.textContent = `Overdue ${Math.abs(_diff)} day${Math.abs(_diff) !== 1 ? "s" : ""}`; }
+                                        else if (_diff === 0) { _info.textContent = "Due today"; }
+                                        else { _info.textContent = `Due in ${_diff} day${_diff !== 1 ? "s" : ""}`; }
+                                    } else {
+                                        _info.textContent = "Not scheduled";
+                                    }
+                                }
                                 const _daysInput = document.getElementById("piContextDays");
                                 if (_daysInput) {
                                     if (_bd) {
@@ -3178,6 +3197,7 @@
                                         const _d = Math.max(0, parseInt(document.getElementById("piContextDays").value) || 1);
                                         if (studyBlockData[_thisBlock]) {
                                             studyBlockData[_thisBlock].dueDate = srsDaysFromNow(_d);
+                                            blockProgress[_thisBlock] = 0;
                                             syncBlockDueDates();
                                             saveSettings();
                                             renderPiCoverage();
@@ -3194,6 +3214,7 @@
                                         ev.stopPropagation();
                                         if (studyBlockData[_thisBlock]) {
                                             studyBlockData[_thisBlock].dueDate = srsToday();
+                                            blockProgress[_thisBlock] = 0;
                                             syncBlockDueDates();
                                             saveSettings();
                                             renderPiCoverage();
@@ -3211,6 +3232,7 @@
                                         ev.stopPropagation();
                                         if (studyBlockData[_thisBlock]) {
                                             studyBlockData[_thisBlock].dueDate = srsDaysFromNow(1);
+                                            blockProgress[_thisBlock] = 0;
                                             syncBlockDueDates();
                                             saveSettings();
                                             renderPiCoverage();
@@ -3270,7 +3292,9 @@
                         } else {
                             const dueMs = new Date(card.dueDate + "T00:00:00").getTime();
                             const todayMs = new Date(today + "T00:00:00").getTime();
-                            daysUntilDue = Math.round((dueMs - todayMs) / 86400000);
+                            daysUntilDue = isNaN(dueMs)
+                                ? 0
+                                : Math.round((dueMs - todayMs) / 86400000);
                             dueDateStr = card.dueDate;
 
                             if (piCoverageMode === "ease") {
@@ -3728,30 +3752,30 @@
                         const { start, end } = blockRange(bn);
                         const blockDigits = end - start + 1;
                         const typed = blockProgress[bn] || 0;
-                        const pct = Math.round(
+                        const pct = Math.min(100, Math.round(
                             (typed / blockDigits) * 100,
-                        );
+                        ));
                         html +=
-                            `<div class="checklist-item" data-block="${bn}" style="cursor:pointer;padding:2px 0;">` +
+                            `<div class="checklist-item" data-block="${bn}" style="cursor:pointer;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;">` +
+                            `<div style="position:absolute;top:0;left:0;bottom:0;width:${pct}%;background:rgba(255,255,255,0.12);border-radius:4px;transition:width 0.3s;"></div>` +
+                            `<div style="position:relative;z-index:1;">` +
                             (typed > 0 ? `◐` : `○`) +
                             ` Block ${bn + 1} (${start + 1}-${end + 1})` +
-                            `<div style="background:rgba(255,255,255,0.12);border-radius:4px;height:6px;overflow:hidden;margin-top:2px;">` +
-                            `<div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px;transition:width 0.3s;"></div></div>` +
-                            `</div>`;
+                            `</div></div>`;
                     }
                     // Note about where add-new-chunks will start
                     const { start: _frS, end: _frE } = blockRange(frontier);
                     const _frDigits = _frE - _frS + 1;
                     const _frTyped = blockProgress[frontier] || 0;
-                    const _frPct = Math.round((_frTyped / _frDigits) * 100);
+                    const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
                     html +=
                         `<div class="checklist-item ` +
                         (due.length > 0 ? `frontier-item` : ``) +
-                        `" data-action="add" style="cursor:pointer;padding:2px 0;">` +
+                        `" data-action="add" style="cursor:pointer;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;margin-top:${due.length > 0 ? "6px" : "0"};border-top:${due.length > 0 ? "1px solid rgba(255,255,255,0.2)" : "none"};">` +
+                        `<div style="position:absolute;top:0;left:0;bottom:0;width:${_frPct}%;background:rgba(255,255,255,0.12);border-radius:4px;transition:width 0.3s;"></div>` +
+                        `<div style="position:relative;z-index:1;">` +
                         `+ Add new chunks (${_frS + 1}-${_frE + 1})` +
-                        `<div style="background:rgba(255,255,255,0.12);border-radius:4px;height:6px;overflow:hidden;margin-top:2px;">` +
-                        `<div style="width:${_frPct}%;height:100%;background:var(--accent);border-radius:4px;transition:width 0.3s;"></div></div>` +
-                        `</div>`;
+                        `</div></div>`;
                     el.innerHTML = html;
                     // Wire clicks
                     el.querySelectorAll(".checklist-item").forEach((item) => {
@@ -3768,6 +3792,9 @@
                                 // re-counted toward the daily goal.
                                 dailyCreditedSeqStart = 0;
                                 dailyCreditedMaxLength = target;
+                                piInput.dispatchEvent(
+                                    new Event("input"),
+                                );
                                 piInput.focus();
                             } else {
                                 // Add new: jump to current frontier position
