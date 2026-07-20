@@ -195,28 +195,13 @@
 }
 
 /* --- Dark mode: SRS cards --- */
-.dark-mode .srs-card {
-    background: var(--modal-bg-subtle);
-}
-.dark-mode .srs-front {
-    border-bottom-color: var(--modal-border);
-}
-.dark-mode .srs-front-label {
-    color: var(--modal-text-muted);
-}
-.dark-mode .srs-pao-term {
-    color: var(--modal-text-color);
-}
-.dark-mode .srs-pao-num {
-    color: var(--modal-text-muted);
-}
-.dark-mode .srs-images img {
-    background: var(--modal-bg);
-    border-color: var(--modal-border-subtle);
-}
-.dark-mode .srs-progress {
-    color: var(--modal-text-muted);
-}
+.dark-mode 
+.dark-mode 
+
+
+
+
+
 .dark-mode .mistake-action-btn {
     background: var(--modal-bg-subtle);
     border-color: var(--modal-border);
@@ -1047,19 +1032,13 @@ input[type="text"]#piInput:focus {
 #range323Start::-webkit-inner-spin-button,
 #range323End::-webkit-outer-spin-button,
 #range323End::-webkit-inner-spin-button,
-#dailyGoalInput::-webkit-outer-spin-button,
-#dailyGoalInput::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
+
 #helperTime,
 #range222Start,
 #range222End,
 #range323Start,
 #range323End,
-#dailyGoalInput {
-    -moz-appearance: textfield;
-}
+
 .pi-context-row button {
     padding: 4px 10px;
     background: rgba(255, 255, 255, 0.2);
@@ -1465,218 +1444,6 @@ input[type="text"]#piInput:focus {
     font-family: sans-serif;
 }
 
-/* --- SRS --- */
-.srs-card {
-    background: #f9f9f9;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    overflow: hidden;
-}
-.srs-front {
-    padding: 16px 20px 12px;
-    border-bottom: 2px dashed #e0e0e0;
-}
-.srs-front-label {
-    font-size: 0.75rem;
-    font-weight: bold;
-    letter-spacing: 0.08em;
-    color: #999;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-}
-.srs-back {
-    padding: 16px 20px 12px;
-    display: none;
-}
-.srs-back.revealed {
-    display: block;
-}
-.srs-back-label {
-    font-size: 0.75rem;
-    font-weight: bold;
-    letter-spacing: 0.08em;
-    color: #667eea;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-}
-.srs-pao-row {
-    display: flex;
-    justify-content: space-around;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-.srs-pao-item {
-    flex: 1;
-    text-align: center;
-}
-.srs-pao-term {
-    display: block;
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: #333;
-}
-.srs-pao-num {
-    font-family: monospace;
-    font-size: 0.95rem;
-    color: #888;
-}
-.srs-images {
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-    margin-top: 8px;
-    flex-wrap: wrap;
-}
-.srs-images img {
-    max-width: 140px;
-    max-height: 140px;
-    border-radius: 6px;
-    object-fit: contain;
-    border: 1px solid #eee;
-    background: white;
-}
-.srs-reveal-btn {
-    width: 100%;
-    padding: 14px;
-    background: #667eea;
-    color: white;
-    border: none;
-    border-radius: 0 0 8px 8px;
-    font-size: 1.1rem;
-    font-family: "Oswald", sans-serif;
-    font-weight: 400;
-    text-transform: uppercase;
-    cursor: pointer;
-    letter-spacing: 0.05em;
-}
-.srs-reveal-btn:hover {
-    background: #5568d4;
-}
-.everest-submit-btn {
-    background: #667eea;
-    color: white;
-}
-.everest-submit-btn:hover {
-    background: #5568d4;
-}
-.everest-quit-btn {
-    background: #eee;
-    color: #666;
-}
-.dark-mode .everest-quit-btn {
-    background: var(--modal-bg-subtle);
-    color: var(--modal-text-muted-2);
-    border: 1px solid var(--modal-border);
-}
-.srs-rating-row {
-    display: none;
-    gap: 8px;
-    margin-top: 12px;
-    width: 100%;
-}
-.srs-rating-row.visible {
-    display: flex;
-}
-.srs-rate-btn {
-    flex: 1;
-    padding: 10px 4px;
-    border: none;
-    border-radius: 6px;
-    font-family: "Oswald", sans-serif;
-    font-size: 0.95rem;
-    font-weight: 400;
-    text-transform: uppercase;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    line-height: 1.1;
-}
-.srs-rate-btn .srs-next-days {
-    font-size: 0.7rem;
-    opacity: 0.75;
-    font-family: sans-serif;
-    text-transform: none;
-}
-.srs-rate-again {
-    background: #fee2e2;
-    color: #b91c1c;
-}
-.srs-rate-hard {
-    background: #fef3c7;
-    color: #92400e;
-}
-.srs-rate-good {
-    background: #dcfce7;
-    color: #166534;
-}
-.srs-rate-easy {
-    background: #dbeafe;
-    color: #1e40af;
-}
-.srs-rate-again:hover {
-    background: #fecaca;
-}
-.srs-rate-hard:hover {
-    background: #fde68a;
-}
-.srs-rate-good:hover {
-    background: #bbf7d0;
-}
-.srs-rate-easy:hover {
-    background: #bfdbfe;
-}
-.srs-progress {
-    font-size: 0.85rem;
-    color: #888;
-    text-align: center;
-    margin-bottom: 8px;
-}
-.srs-due-badge {
-    background: #667eea;
-    color: white;
-    border-radius: 10px;
-    padding: 1px 7px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    margin-left: 6px;
-    vertical-align: middle;
-}
-.mistake-controls {
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-}
-.mistake-action-btn {
-    padding: 12px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    background: white;
-    font-weight: bold;
-    cursor: pointer;
-    width: 100%;
-    text-align: center;
-}
-.btn-remove-mistake {
-    border-color: var(--highlight-incorrect);
-    color: var(--highlight-incorrect);
-}
-
-/* Anki images loaded indicator */
-.anki-status {
-    font-size: 0.8rem;
-    color: #888;
-    text-align: center;
-    margin-top: 4px;
-}
-.anki-status.loaded {
-    color: #4ade80;
-    font-weight: bold;
-}
 
 /* --- Settings panel buttons (used in fieldset action rows) --- */
 .settings-btn {
