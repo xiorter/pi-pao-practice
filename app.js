@@ -2935,47 +2935,24 @@
                     //   * Already-scheduled future cards are added on top.
                     //   * Learning cards (reviews === 0) are excluded from the
                     //     backlog — they're limited by newPerDay, not maxReviews.
-                    const _cfg = srsGetSettings();
-                    const _dailyReviewRate = _cfg.maxReviews || 200;
-                    const _backlog = Object.values(srsData).filter(
-                        (c) => c.reviews > 0 && c.dueDate <= todayStr,
-                    ).length;
-                    // Already-scheduled future cards (current behaviour).
+                    // Future-digit counts from study block due dates.
                     const _alreadyScheduled = {};
-                    for (const posStr in srsData) {
-                        const card = srsData[posStr];
-                        if (card.dueDate > todayStr) {
-                            _alreadyScheduled[card.dueDate] =
-                                (_alreadyScheduled[card.dueDate] || 0) + 1;
+                    for (const bnStr in studyBlockData) {
+                        const bn = parseInt(bnStr);
+                        const bd = studyBlockData[bn];
+                        const { start, end } = blockRange(bn);
+                        const digitCount = end - start + 1;
+                        if (bd.dueDate > todayStr) {
+                            _alreadyScheduled[bd.dueDate] =
+                                (_alreadyScheduled[bd.dueDate] || 0) +
+                                digitCount;
                         }
                     }
-                    const futureDueByDate = {};
-                    let maxFutureDue = 0;
-                    const _startDate = new Date(todayStr + "T00:00:00");
-                    const _cursor = new Date(_startDate);
-                    _cursor.setDate(_cursor.getDate() + 1); // start at tomorrow
-                    while (_cursor <= gridEnd) {
-                        const _dateStr =
-                            _cursor.getFullYear() +
-                            "-" +
-                            String(_cursor.getMonth() + 1).padStart(2, "0") +
-                            "-" +
-                            String(_cursor.getDate()).padStart(2, "0");
-                        const _daysPassed = Math.round(
-                            (_cursor - _startDate) / 86400000,
-                        );
-                        const _backlogRemaining = Math.max(
-                            0,
-                            _backlog - _daysPassed * _dailyReviewRate,
-                        );
-                        const _scheduledForDay = _alreadyScheduled[_dateStr] || 0;
-                        const _totalDue = _backlogRemaining + _scheduledForDay;
-                        if (_totalDue > 0) {
-                            futureDueByDate[_dateStr] = _totalDue;
-                            if (_totalDue > maxFutureDue) maxFutureDue = _totalDue;
-                        }
-                        _cursor.setDate(_cursor.getDate() + 1);
-                    }
+                    const futureDueByDate = _alreadyScheduled;
+                    let maxFutureDue = Object.values(futureDueByDate).reduce(
+                        (a, b) => Math.max(a, b),
+                        0,
+                    );
                     if (maxFutureDue === 0) maxFutureDue = 1;
 
                     // Color interpolation helper
@@ -3105,19 +3082,23 @@
 
                     // Compute cells per block for grid layout
                     const _perBlock = studyBlockSize;
+                    // Grid has one auto-width column for block labels,
+                    // then _perBlock equal-width columns for cells.
                     container.style.cssText =
-                        `display:grid;grid-template-columns:repeat(${Math.max(1, _perBlock)},1fr);gap:2px;width:max-content;`;
+                        `display:grid;grid-template-columns:auto repeat(${Math.max(1, _perBlock)},1fr);gap:2px;width:max-content;`;
 
                     let currentBlock = -1;
                     let p = 0;
                     while (p <= maxPos && p < PI_DIGITS.length) {
-                        // If we've entered a new study block, insert a label row
+                        // If we've entered a new study block, insert a label cell
+                        // in column 1. The grid will auto-place the following
+                        // _perBlock cells in columns 2.._perBlock+1, then wrap.
                         const _cellBlock = blockForPos(p);
                         if (_cellBlock !== currentBlock) {
                             currentBlock = _cellBlock;
                             const _bd = studyBlockData[currentBlock];
                             const _today = srsToday();
-                            let label = `Block ${currentBlock + 1}`;
+                            let label = `${currentBlock + 1}`;
                             if (_bd) {
                                 if (_bd.dueDate < _today) {
                                     const over = Math.round(
@@ -3127,9 +3108,9 @@
                                             )) /
                                             86400000,
                                     );
-                                    label += ` (${over}d overdue)`;
+                                    label += ` ${over}d`;
                                 } else if (_bd.dueDate === _today) {
-                                    label += " (Today)";
+                                    label += " 0d";
                                 } else {
                                     const days =
                                         Math.round(
@@ -3141,13 +3122,13 @@
                                                 )) /
                                                 86400000,
                                         ) || 1;
-                                    label += ` (${days}d)`;
+                                    label += ` ${days}d`;
                                 }
                             }
                             const _labelCell = document.createElement("div");
-                            _labelCell.style.cssText =
-                                "font-size:0.65rem;color:#888;white-space:nowrap;padding:4px 0;font-weight:bold;grid-column:1 / -1;";
                             _labelCell.textContent = label;
+                            _labelCell.style.cssText =
+                                "font-size:0.55rem;color:#888;white-space:nowrap;padding-right:2px;display:flex;align-items:center;height:12px;";
                             container.appendChild(_labelCell);
                         }
                         const cellPos = p; // capture current position for closures
@@ -3629,8 +3610,7 @@
                         max = Math.max(max, parseInt(bnStr));
                     const frontier = max + 1;
                     const { start: frStart } = blockRange(frontier);
-                    const hasContent = due.length > 0;
-                    el.style.display = hasContent ? "block" : "none";
+                    el.style.display = "block";
                     let html = "";
                     for (const bn of due) {
                         const { start, end } = blockRange(bn);
