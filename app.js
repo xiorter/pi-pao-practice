@@ -472,7 +472,7 @@
                 // ── Daily Goal / Stats ──
                 let dailyGoal = 400;
                 let dailyStats = {}; // { "2026-06-21": correctDigitCount }
-                let studyBlockSize = 200; // digits per study block
+                let studyBlockSize = 25; // chunks per study block (default 25)
                 let studyBlockData = {}; // { blockNum: { start, end, dueDate, interval, easeFactor, reviews, lapses } }
                 let blockProgress = {}; // { blockNum: digitsTypedSoFar }
                 let studyBlocksMigrated = false;
@@ -1303,7 +1303,7 @@
                         dayOffsetHours = s.dayOffsetHours ?? 4;
                         srsRawMode = s.srsRawMode ?? false;
                         isReviewMode = s.isReviewMode ?? false;
-                        studyBlockSize = s.studyBlockSize ?? 200;
+                        studyBlockSize = s.studyBlockSize ?? 25;
                         studyBlockData = s.studyBlockData || {};
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
@@ -3104,12 +3104,9 @@
                     console.log("renderPiCoverage", { maxCardPos, maxPos, srsPositions: srsPositions.slice(-5) });
 
                     // Compute cells per block for grid layout
-                    const _perBlock = Math.floor(
-                        studyBlockSize /
-                            getGroupSizeForMode(getModeForPos(1)),
-                    );
+                    const _perBlock = studyBlockSize;
                     container.style.cssText =
-                        `display:grid;grid-template-columns:auto repeat(${Math.max(1, _perBlock)},1fr);gap:2px;width:max-content;`;
+                        `display:grid;grid-template-columns:repeat(${Math.max(1, _perBlock)},1fr);gap:2px;width:max-content;`;
 
                     let currentBlock = -1;
                     let p = 0;
@@ -3120,7 +3117,7 @@
                             currentBlock = _cellBlock;
                             const _bd = studyBlockData[currentBlock];
                             const _today = srsToday();
-                            let label = `Block ${currentBlock}`;
+                            let label = `Block ${currentBlock + 1}`;
                             if (_bd) {
                                 if (_bd.dueDate < _today) {
                                     const over = Math.round(
@@ -3149,14 +3146,8 @@
                             }
                             const _labelCell = document.createElement("div");
                             _labelCell.style.cssText =
-                                "font-size:0.65rem;color:#888;white-space:nowrap;padding-right:4px;display:flex;align-items:center;";
+                                "font-size:0.65rem;color:#888;white-space:nowrap;padding:4px 0;font-weight:bold;grid-column:1 / -1;";
                             _labelCell.textContent = label;
-                            // If the block is due, highlight it
-                            if (_bd && _bd.dueDate <= _today) {
-                                _labelCell.style.fontWeight = "bold";
-                                _labelCell.style.color =
-                                    "var(--accent, #3584E4)";
-                            }
                             container.appendChild(_labelCell);
                         }
                         const cellPos = p; // capture current position for closures
@@ -3598,25 +3589,25 @@
                         const bn = parseInt(bnStr);
                         const bd = studyBlockData[bn];
                         if (bd.dueDate <= today) {
-                            goal += studyBlockSize;
+                            const { start, end } = blockRange(bn);
+                            const blockDigits = end - start + 1;
+                            goal += blockDigits;
                             const typed = blockProgress[bn] || 0;
-                            progress += Math.min(typed, studyBlockSize);
+                            progress += Math.min(typed, blockDigits);
                         }
                     }
                     // New frontier: first block that either isn't in studyBlockData
                     // or is incomplete. Walk from block 0 upward.
-                    let frontierBlock = null;
                     let maxBlock = 0;
                     for (const bnStr in studyBlockData) {
                         maxBlock = Math.max(maxBlock, parseInt(bnStr));
                     }
-                    // The frontier is the next block after the highest existing
-                    // block, or block 0 if there are none.
                     const checkBlock = maxBlock + 1;
                     const { start, end } = blockRange(checkBlock);
-                    goal += studyBlockSize;
+                    const blockDigits = end - start + 1;
+                    goal += blockDigits;
                     const typed = blockProgress[checkBlock] || 0;
-                    progress += Math.min(typed, studyBlockSize);
+                    progress += Math.min(typed, blockDigits);
                     return { goal, progress };
                 }
 
@@ -3642,23 +3633,26 @@
                     el.style.display = hasContent ? "block" : "none";
                     let html = "";
                     for (const bn of due) {
+                        const { start, end } = blockRange(bn);
+                        const blockDigits = end - start + 1;
                         const typed = blockProgress[bn] || 0;
                         const pct = Math.round(
-                            (typed / studyBlockSize) * 100,
+                            (typed / blockDigits) * 100,
                         );
                         html +=
                             `<div class="checklist-item" data-block="${bn}" style="cursor:pointer;padding:2px 0;">` +
                             (typed > 0 ? `◐` : `○`) +
-                            ` Block ${bn} (${bn * studyBlockSize}-${(bn + 1) * studyBlockSize - 1})` +
+                            ` Block ${bn + 1} (${start + 1}-${end + 1})` +
                             (typed > 0
-                                ? ` · ${typed}/${studyBlockSize} (${pct}%)`
+                                ? ` · ${typed}/${blockDigits} (${pct}%)`
                                 : "") +
                             `</div>`;
                     }
                     // Note about where add-new-chunks will start
+                    const { start: _frS, end: _frE } = blockRange(frontier);
                     html +=
                         `<div class="checklist-item frontier-item" data-action="add" style="cursor:pointer;padding:2px 0;">` +
-                        `+ Add new chunks (${frStart}-${frStart + studyBlockSize - 1})` +
+                        `+ Add new chunks (${_frS + 1}-${_frE + 1})` +
                         `</div>`;
                     el.innerHTML = html;
                     // Wire clicks
@@ -3667,24 +3661,27 @@
                             const bn = item.dataset.block;
                             if (bn) {
                                 const n = parseInt(bn);
-                                // Jump to chunk just before this block
+                                // Jump to the block's start position
                                 const { start } = blockRange(n);
-                                const target = Math.max(
-                                    0,
-                                    snapToGroupStart(start) -
-                                        getGroupSizeForMode(
-                                            getModeForPos(start + 1),
-                                        ),
-                                );
+                                const target = snapToGroupStart(start);
                                 piInput.value = PI_DIGITS.substr(0, target);
                                 sequenceStartIndex = 0;
-                                piInput.dispatchEvent(new Event("input"));
+                                // Set credit state so digits aren't
+                                // re-counted toward the daily goal.
+                                dailyCreditedSeqStart = 0;
+                                dailyCreditedMaxLength = target;
+                                piInput.dispatchEvent(
+                                    new Event("input"),
+                                );
                             } else {
                                 // Add new: jump to frontier
-                                const target = snapToGroupStart(frStart);
+                                const { start } = blockRange(frontier);
+                                const target = snapToGroupStart(start);
                                 piInput.value = PI_DIGITS.substr(0, target);
                                 sequenceStartIndex = 0;
-                                piInput.dispatchEvent(new Event("input"));
+                                piInput.dispatchEvent(
+                                    new Event("input"),
+                                );
                             }
                             piInput.focus();
                         });
@@ -3917,13 +3914,31 @@
                 }
 
                 // ── Study Blocks ──
+                function chunkStartPosition(chunkIdx) {
+                    let p = 0;
+                    let count = 0;
+                    while (count < chunkIdx && p < PI_DIGITS.length) {
+                        const m = getModeForPos(p + 1);
+                        const gs = getGroupSizeForMode(m);
+                        if (p + gs > PI_DIGITS.length) break;
+                        p += gs;
+                        count++;
+                    }
+                    return p;
+                }
+
                 function blockForPos(pos) {
-                    return Math.floor(pos / studyBlockSize);
+                    const gNum = posToGroupNum(pos); // 1-indexed group number
+                    if (gNum <= 0) return 0;
+                    return Math.floor((gNum - 1) / studyBlockSize);
                 }
 
                 function blockRange(blockNum) {
-                    const start = blockNum * studyBlockSize;
-                    return { start, end: start + studyBlockSize - 1 };
+                    const startChunk = blockNum * studyBlockSize;
+                    const endChunk = startChunk + studyBlockSize - 1;
+                    const start = chunkStartPosition(startChunk);
+                    const endPos = chunkStartPosition(endChunk + 1) - 1;
+                    return { start, end: endPos >= start ? endPos : start };
                 }
 
                 function blockDigest(blockNum) {
@@ -3941,17 +3956,7 @@
                 }
 
                 function blockChunkCount(blockNum) {
-                    const { start, end } = blockRange(blockNum);
-                    let count = 0;
-                    let p = snapToGroupStart(start);
-                    while (p <= end) {
-                        const m = getModeForPos(p + 1);
-                        const gs = getGroupSizeForMode(m);
-                        if (p + gs > end + 1) break;
-                        count++;
-                        p += gs;
-                    }
-                    return count;
+                    return studyBlockSize; // always studyBlockSize chunks per block
                 }
 
                 function isBlockComplete(blockNum) {

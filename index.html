@@ -98,9 +98,6 @@
         <!-- Label shown above the bar when bar is at bottom -->
         <div id="goalBottomLabel"></div>
 
-        <!-- Study block checklist -->
-        <div id="blockChecklist" style="display:none;margin-top:6px;font-size:0.8rem;color:#888;text-align:center;"></div>
-
         <!-- Toast notification for mistake added to review -->
         <div
             id="mistakeToast"
@@ -125,7 +122,9 @@
         <h1>Pi Practice</h1>
 
         <main>
-            <div class="controls">
+            <div class="controls" style="display:flex;gap:12px;align-items:flex-start;">
+                <div id="blockChecklist" style="display:none;font-size:0.8rem;color:#888;text-align:left;min-width:160px;padding:8px;border:1px solid #ddd;border-radius:6px;background:rgba(255,255,255,0.5);"></div>
+                <div style="flex:1">
                 <div class="input-container">
                     <input
                         type="text"
@@ -186,6 +185,7 @@
                     </button>
                 </div>
             </div>
+        </div>
             <div id="testTimer" style="display: none"></div>
             <div id="testTimerHidden" style="display: none">
                 ⏱ tap to show timer
@@ -1368,13 +1368,13 @@
                     <!-- Daily goal + colour scheme: one horizontal row -->
                     <div class="stats-settings-row">
                         <div class="stats-goal-editor">
-                            <label for="studyBlockSizeInput">Block size:</label>
+                            <label for="studyBlockSizeInput">Block size (chunks):</label>
                             <input
                                 type="number"
                                 id="studyBlockSizeInput"
-                                min="10"
-                                step="10"
-                                value="200"
+                                min="5"
+                                step="1"
+                                value="25"
                             />
                             <span class="stats-goal-unit">digits</span>
                         </div>
