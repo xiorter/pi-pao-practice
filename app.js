@@ -1737,7 +1737,6 @@
                         studyBlockData,
                         studyBlocksMigrated,
                         blockProgress,
-                        "_blocksShifted": true,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -3094,12 +3093,16 @@
                     while (p <= maxPos && p < PI_DIGITS.length) {
                         const _cellBlock = blockForPos(p);
                         if (_cellBlock !== currentBlock) {
-                            // Pad incomplete row with empty cells
+                            // Pad incomplete row or remove excess cells
                             if (cellsInRow > 0 && cellsInRow < _perBlock) {
                                 for (let _e = cellsInRow; _e < _perBlock; _e++) {
                                     const _pad = document.createElement("div");
                                     _pad.style.cssText = "width:12px;height:12px;visibility:hidden;";
                                     container.appendChild(_pad);
+                                }
+                            } else if (cellsInRow > _perBlock) {
+                                for (let _r = 0; _r < cellsInRow - _perBlock; _r++) {
+                                    if (container.lastChild) container.removeChild(container.lastChild);
                                 }
                             }
                             currentBlock = _cellBlock;
@@ -3136,7 +3139,92 @@
                             const _labelCell = document.createElement("div");
                             _labelCell.textContent = label;
                             _labelCell.style.cssText =
-                                "font-size:0.55rem;color:#888;white-space:nowrap;padding-right:2px;display:flex;align-items:center;height:12px;";
+                                "font-size:0.55rem;color:#888;white-space:nowrap;padding-right:2px;display:flex;align-items:center;height:12px;cursor:pointer;";
+                            _labelCell.title = "Right-click to change due date";
+                            _labelCell.addEventListener("contextmenu", (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                hidePiContextMenu();
+                                // Show block context menu
+                                const menu = document.getElementById("piContextMenu");
+                                if (!menu) return;
+                                const _bd = studyBlockData[currentBlock];
+                                const _h = menu.querySelector(".pi-context-header");
+                                if (_h) _h.textContent = `Block ${currentBlock + 1} — due in ?`; // format below
+                                const _info = menu.querySelector(".pi-context-info");
+                                if (_info) _info.textContent = _bd ? `Due: ${srsFormatDate(_bd.dueDate)}` : "Not scheduled";
+                                const _daysInput = document.getElementById("piContextDays");
+                                if (_daysInput) {
+                                    if (_bd) {
+                                        const _dueMs = new Date(_bd.dueDate + "T00:00:00");
+                                        const _todayMs = new Date(srsToday() + "T00:00:00");
+                                        _daysInput.value = Math.round((_dueMs - _todayMs) / 86400000);
+                                    } else {
+                                        _daysInput.value = 1;
+                                    }
+                                    _daysInput.disabled = false;
+                                }
+                                const _apply = document.getElementById("piContextApply");
+                                if (_apply) {
+                                    _apply.onclick = (ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        const _d = Math.max(0, parseInt(document.getElementById("piContextDays").value) || 1);
+                                        if (studyBlockData[currentBlock]) {
+                                            studyBlockData[currentBlock].dueDate = srsDaysFromNow(_d);
+                                            syncBlockDueDates();
+                                            saveSettings();
+                                            renderPiCoverage();
+                                            updateGoalBarOnly();
+                                        }
+                                        hidePiContextMenu();
+                                    };
+                                }
+                                const _todayBtn = document.getElementById("piContextToday");
+                                if (_todayBtn) {
+                                    _todayBtn.textContent = "Due Today";
+                                    _todayBtn.onclick = (ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        if (studyBlockData[currentBlock]) {
+                                            studyBlockData[currentBlock].dueDate = srsToday();
+                                            syncBlockDueDates();
+                                            saveSettings();
+                                            renderPiCoverage();
+                                            updateGoalBarOnly();
+                                        }
+                                        hidePiContextMenu();
+                                    };
+                                }
+                                const _removeBtn = document.getElementById("piContextRemove");
+                                if (_removeBtn) {
+                                    _removeBtn.textContent = "All caught up";
+                                    _removeBtn.style.display = "";
+                                    _removeBtn.onclick = (ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        // Set to far future so it disappears from due list
+                                        if (studyBlockData[currentBlock]) {
+                                            studyBlockData[currentBlock].dueDate = srsDaysFromNow(365 * 10);
+                                            syncBlockDueDates();
+                                            saveSettings();
+                                            renderPiCoverage();
+                                            updateGoalBarOnly();
+                                        }
+                                        hidePiContextMenu();
+                                    };
+                                }
+                                menu.style.display = "block";
+                                const pad = 4;
+                                const mw = menu.offsetWidth || 240;
+                                const mh = menu.offsetHeight || 160;
+                                let x = e.clientX;
+                                let y = e.clientY;
+                                if (x + mw + pad > window.innerWidth) x = window.innerWidth - mw - pad;
+                                if (y + mh + pad > window.innerHeight) y = window.innerHeight - mh - pad;
+                                menu.style.left = x + "px";
+                                menu.style.top = y + "px";
+                            });
                             container.appendChild(_labelCell);
                         }
                         cellsInRow++;
@@ -3358,6 +3446,8 @@
                     const applyBtn = document.getElementById("piContextApply");
                     const todayBtn = document.getElementById("piContextToday");
                     const removeBtn = document.getElementById("piContextRemove");
+                    // Reset button text in case the block context menu changed it
+                    if (removeBtn) removeBtn.textContent = "Remove from Deck";
 
                     if (header) {
                         header.textContent = `Image #${groupNum} · Position #${pos + 1}`;
@@ -3640,21 +3730,20 @@
                             `<div class="checklist-item" data-block="${bn}" style="cursor:pointer;padding:2px 0;">` +
                             (typed > 0 ? `◐` : `○`) +
                             ` Block ${bn + 1} (${start + 1}-${end + 1})` +
-                            (typed > 0
-                                ? ` · ${typed}/${blockDigits} (${pct}%)`
-                                : "") +
+                            `<div style="background:rgba(255,255,255,0.12);border-radius:4px;height:6px;overflow:hidden;margin-top:2px;">` +
+                            `<div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px;transition:width 0.3s;"></div></div>` +
                             `</div>`;
                     }
                     // Note about where add-new-chunks will start
-                    const { end: _frE } = blockRange(frontier);
-                    // Start the frontier range at the next untyped digit
+                    const { start: _frS, end: _frE } = blockRange(frontier);
+                    // Current frontier position (next untyped digit)
                     const _srsPos = Object.keys(srsData).map(Number);
                     const _maxPos = _srsPos.length > 0 ? Math.max(..._srsPos) + 1 : 1;
                     html +=
                         `<div class="checklist-item ` +
                         (due.length > 0 ? `frontier-item` : ``) +
                         `" data-action="add" style="cursor:pointer;padding:2px 0;">` +
-                        `+ Add new chunks (${_maxPos + 1}-${_frE + 1})` +
+                        `+ Add new chunks (${_frS + 1}-${_frE + 1})` +
                         `</div>`;
                     el.innerHTML = html;
                     // Wire clicks
@@ -6778,19 +6867,8 @@
                         migrateStudyBlocks();
                         saveSettings();
                     }
-                    // One-time shift: bring all blocks 1 day sooner
-                    if (!s._blocksShifted) {
-                        for (const bn in studyBlockData) {
-                            const d = new Date(studyBlockData[bn].dueDate + "T00:00:00");
-                            d.setDate(d.getDate() - 1);
-                            const y = d.getFullYear();
-                            const m = String(d.getMonth() + 1).padStart(2, "0");
-                            const dd = String(d.getDate()).padStart(2, "0");
-                            studyBlockData[bn].dueDate = `${y}-${m}-${dd}`;
-                        }
-                        syncBlockDueDates();
-                        saveSettings();
-                    }
+                    renderChecklist();
+                    srsUpdateBadge();
                     console.log("App Ready");
                     piInput.focus();
 
