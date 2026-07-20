@@ -3103,8 +3103,62 @@
                     const maxPos = Math.max(maxCardPos, 300);
                     console.log("renderPiCoverage", { maxCardPos, maxPos, srsPositions: srsPositions.slice(-5) });
 
+                    // Compute cells per block for grid layout
+                    const _perBlock = Math.floor(
+                        studyBlockSize /
+                            getGroupSizeForMode(getModeForPos(1)),
+                    );
+                    container.style.cssText =
+                        `display:grid;grid-template-columns:auto repeat(${Math.max(1, _perBlock)},1fr);gap:2px;width:max-content;`;
+
+                    let currentBlock = -1;
                     let p = 0;
                     while (p <= maxPos && p < PI_DIGITS.length) {
+                        // If we've entered a new study block, insert a label row
+                        const _cellBlock = blockForPos(p);
+                        if (_cellBlock !== currentBlock) {
+                            currentBlock = _cellBlock;
+                            const _bd = studyBlockData[currentBlock];
+                            const _today = srsToday();
+                            let label = `Block ${currentBlock}`;
+                            if (_bd) {
+                                if (_bd.dueDate < _today) {
+                                    const over = Math.round(
+                                        (new Date(_today + "T00:00:00") -
+                                            new Date(
+                                                _bd.dueDate + "T00:00:00",
+                                            )) /
+                                            86400000,
+                                    );
+                                    label += ` (${over}d overdue)`;
+                                } else if (_bd.dueDate === _today) {
+                                    label += " (Today)";
+                                } else {
+                                    const days =
+                                        Math.round(
+                                            (new Date(
+                                                _bd.dueDate + "T00:00:00",
+                                            ) -
+                                                new Date(
+                                                    _today + "T00:00:00",
+                                                )) /
+                                                86400000,
+                                        ) || 1;
+                                    label += ` (${days}d)`;
+                                }
+                            }
+                            const _labelCell = document.createElement("div");
+                            _labelCell.style.cssText =
+                                "font-size:0.65rem;color:#888;white-space:nowrap;padding-right:4px;display:flex;align-items:center;";
+                            _labelCell.textContent = label;
+                            // If the block is due, highlight it
+                            if (_bd && _bd.dueDate <= _today) {
+                                _labelCell.style.fontWeight = "bold";
+                                _labelCell.style.color =
+                                    "var(--accent, #3584E4)";
+                            }
+                            container.appendChild(_labelCell);
+                        }
                         const cellPos = p; // capture current position for closures
                         const mode = getModeForPos(p + 1);
                         const gs = getGroupSizeForMode(mode);
@@ -3300,18 +3354,6 @@
                     if (elOverdue) elOverdue.textContent = pcStatsOverdue;
                     if (elNotAdded) elNotAdded.textContent = pcStatsNotAdded;
                     if (elTotal) elTotal.textContent = pcStatsTotal;
-
-                    // Pad the last row to 50 cells with transparent placeholders
-                    const totalCells = container.children.length;
-                    const remainder = totalCells % 50;
-                    if (remainder > 0) {
-                        const padCount = 50 - remainder;
-                        for (let i = 0; i < padCount; i++) {
-                            const pad = document.createElement("div");
-                            pad.style.cssText = "width:12px;height:12px;visibility:hidden;";
-                            container.appendChild(pad);
-                        }
-                    }
                 }
 
                 // Pi coverage right-click context menu
