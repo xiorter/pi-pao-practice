@@ -92,6 +92,10 @@
                 let browseRateHistory = []; // [{ pos, oldCard, isDue, rating }]
                 let browseRateRedo = []; // [{ pos, newCard, isDue, rating }]
 
+                let _blockRatings = {};
+                const SEV_W_AGAIN = 2, SEV_W_HARD = 1, SEV_W_GOOD = 0, SEV_W_EASY = 0;
+                const SEV_THRESH_EASY = 0, SEV_THRESH_GOOD = 0.08, SEV_THRESH_HARD = 0.25;
+
                 // ── Goal bar settings ──
                 let goalBarUpdate = "digit"; // "digit" | "group" | "chunk"
                 let goalBarPosition = "top"; // "top" | "bottom"
@@ -1984,19 +1988,24 @@
                                     // If the block is now fully typed,
                                     // finalise it as a study block.
                                     if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
-                                        const { start, end } = blockRange(_bn);
-                                        const _interval = 1;
+                                        const { start: _bS, end: _bE } = blockRange(_bn);
                                         studyBlockData[_bn] = {
-                                            start,
-                                            end,
-                                            dueDate: srsDaysFromNow(_interval),
-                                            interval: _interval,
+                                            start: _bS,
+                                            end: _bE,
+                                            dueDate: srsToday(),
+                                            interval: 0,
                                             easeFactor: 2.5,
                                             reviews: 0,
                                             lapses: 0,
                                         };
                                         syncBlockDueDates();
                                         saveSettings();
+                                    }
+                                    if (studyBlockData[_bn]) {
+                                        const { start: _bS, end: _bE } = blockRange(_bn);
+                                        if (blockProgress[_bn] >= _bE - _bS + 1) {
+                                            rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
+                                        }
                                     }
                                     srsUpdateBadge();
                                 }
@@ -3144,7 +3153,7 @@
                                     label += ` ${days}d`;
                                 }
                             } else {
-                                label += " -";
+                                label += " None";
                             }
                             const _labelCell = document.createElement("div");
                             // Capture the block number at label creation time
@@ -3756,9 +3765,9 @@
                             (typed / blockDigits) * 100,
                         ));
                         html +=
-                            `<div class="checklist-item" data-block="${bn}" style="cursor:pointer;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;">` +
-                            `<div style="position:absolute;top:0;left:0;bottom:0;width:${pct}%;background:rgba(255,255,255,0.12);border-radius:4px;transition:width 0.3s;"></div>` +
-                            `<div style="position:relative;z-index:1;">` +
+                            `<div class="checklist-entry" data-block="${bn}">` +
+                            `<div class="checklist-progress" style="width:${pct}%;"></div>` +
+                            `<div class="checklist-text">` +
                             (typed > 0 ? `◐` : `○`) +
                             ` Block ${bn + 1} (${start + 1}-${end + 1})` +
                             `</div></div>`;
@@ -3768,17 +3777,13 @@
                     const _frDigits = _frE - _frS + 1;
                     const _frTyped = blockProgress[frontier] || 0;
                     const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
-                    html +=
-                        `<div class="checklist-item ` +
-                        (due.length > 0 ? `frontier-item` : ``) +
-                        `" data-action="add" style="cursor:pointer;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;margin-top:${due.length > 0 ? "6px" : "0"};border-top:${due.length > 0 ? "1px solid rgba(255,255,255,0.2)" : "none"};">` +
-                        `<div style="position:absolute;top:0;left:0;bottom:0;width:${_frPct}%;background:rgba(255,255,255,0.12);border-radius:4px;transition:width 0.3s;"></div>` +
-                        `<div style="position:relative;z-index:1;">` +
-                        `+ Add new chunks (${_frS + 1}-${_frE + 1})` +
-                        `</div></div>`;
+                    html += (due.length > 0 ? `<div class="frontier-sep"></div>` : ``) +
+                        `<div class="checklist-entry" data-action="add">` +
+                        `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
+                        `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})</div></div>`;
                     el.innerHTML = html;
                     // Wire clicks
-                    el.querySelectorAll(".checklist-item").forEach((item) => {
+                    el.querySelectorAll(".checklist-entry").forEach((item) => {
                         item.addEventListener("click", () => {
                             const bn = item.dataset.block;
                             if (bn) {
@@ -4090,6 +4095,38 @@
                     return blockDigest(blockNum) >= blockChunkCount(blockNum);
                 }
 
+                function rescheduleBlockFromSeverity(bn, bd) {
+                    const ratings = _blockRatings[bn] || {};
+                    const chunkCount = blockChunkCount(bn);
+                    let totalPoints = 0;
+                    for (const posStr in ratings) {
+                        const r = ratings[posStr];
+                        if (r === 1) totalPoints += SEV_W_AGAIN;
+                        else if (r === 2) totalPoints += SEV_W_HARD;
+                    }
+                    const severity = Math.min(1, totalPoints / (2 * chunkCount));
+                    const isFirst = bd.interval === 0;
+                    if (severity >= SEV_THRESH_HARD) {
+                        bd.interval = isFirst ? 0 : 1;
+                        bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.2);
+                    } else if (severity >= SEV_THRESH_GOOD) {
+                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * 1.2));
+                        bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.15);
+                    } else if (severity > SEV_THRESH_EASY) {
+                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * bd.easeFactor));
+                    } else {
+                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * bd.easeFactor * 1.3));
+                        bd.easeFactor = Math.min(4.0, bd.easeFactor + 0.15);
+                    }
+                    bd.dueDate = isFirst && severity >= SEV_THRESH_HARD ? srsToday() : srsDaysFromNow(bd.interval);
+                    bd.reviews++;
+                    blockProgress[bn] = 0;
+                    delete _blockRatings[bn];
+                    syncBlockDueDates();
+                    saveSettings();
+                    showToast(`Block ${bn + 1} review complete: ${severity >= SEV_THRESH_HARD ? "Again" : severity >= SEV_THRESH_GOOD ? "Hard" : severity > SEV_THRESH_EASY ? "Good" : "Easy"}`);
+                }
+
                 function migrateStudyBlocks() {
                     const blocks = {};
                     for (const posStr in srsData) {
@@ -4214,6 +4251,17 @@
                     if (shouldCountNew && card.reviews === 0)
                         srsNewSeenToday++;
                     card.reviews++;
+
+                    const _posBlock = blockForPos(pos);
+                    if (inReviewState && studyBlockData[_posBlock]) {
+                        if (rating === 1) card.lapses++;
+                        if (!_blockRatings[_posBlock]) _blockRatings[_posBlock] = {};
+                        if (_blockRatings[_posBlock][pos] === undefined) {
+                            _blockRatings[_posBlock][pos] = rating;
+                        }
+                        saveSettings();
+                        return shouldCountDaily;
+                    }
 
                     if (inReviewState) {
                         // ── Graduated card: SM-2 ──
@@ -5229,6 +5277,8 @@
                             studyBlockSize = v;
                             // Recalculate blocks with new size
                             studyBlockData = {};
+                            blockProgress = {};
+                            _blockRatings = {};
                             migrateStudyBlocks();
                             e.target.value = v;
                             saveSettings();
@@ -6650,6 +6700,17 @@
                                     }
                                     imagesModal.style.display = "none";
                                     openFlashcards(practiceIndex);
+                                }
+                                // Shift+1-4: manually rate the current typing chunk
+                                if (e.shiftKey && currentTypingChunkPos >= 0) {
+                                    const rk = e.key === "1" ? 1 : e.key === "2" ? 2 : e.key === "3" ? 3 : e.key === "4" ? 4 : 0;
+                                    if (rk) {
+                                        e.preventDefault();
+                                        srsRate(currentTypingChunkPos, rk, null);
+                                        srsUpdateBadge();
+                                        saveSettings();
+                                        showToast("Chunk rated " + (rk === 1 ? "Again" : rk === 2 ? "Hard" : rk === 3 ? "Good" : "Easy"));
+                                    }
                                 }
                                 // Everest hotkey: toggle Everest modal
                                 if (e.key.toUpperCase() === everestHotkey) {
