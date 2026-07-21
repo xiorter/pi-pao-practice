@@ -480,6 +480,7 @@
                 let studyBlockData = {}; // { blockNum: { start, end, dueDate, interval, easeFactor, reviews, lapses } }
                 let blockProgress = {}; // { blockNum: digitsTypedSoFar }
                 let studyBlocksMigrated = false;
+                let skipProcessing = false; // set true to load digits without rating/crediting
                 let posTypedDates = {}; // { chunkStartPos: "YYYY-MM-DD" } — last date a chunk was completed
                 let dailyActiveTotal = 0; // digits typed today within active blocks (for goal bar)
                 let dailyCreditedSeqStart = -1;
@@ -1766,6 +1767,29 @@
                 function checkPiDigits(input) {
                     let val = input.value.replace(/\D/g, "");
 
+                    // When a checklist entry was clicked, digits were loaded into
+                    // the input only so the display shows them — skip all rating,
+                    // crediting, and progress tracking.
+                    if (skipProcessing) {
+                        skipProcessing = false;
+                        sequenceStartIndex = 0;
+                        currentInputLength = val.length;
+                        const outputDiv = document.getElementById("output");
+                        const outputContainer = document.getElementById("output-container");
+                        // Render loaded digits (just inline spans, no chunk logic)
+                        if (outputDiv) {
+                            let h = "";
+                            for (let i = 0; i < val.length; i += 6) {
+                                h += `<span class="digit-group">${val.substr(i, 6)}</span>`;
+                            }
+                            outputDiv.innerHTML = h;
+                        }
+                        const posEl = document.getElementById("position");
+                        if (posEl) posEl.innerHTML = `#1 → #${val.length} (${val.length})`;
+                        if (outputContainer) outputContainer.scrollTop = outputContainer.scrollHeight;
+                        return;
+                    }
+
                     // Only do a full re-search of all of pi when the typed value can no
                     // longer be explained as a continuation/truncation of the digits we're
                     // already tracking at sequenceStartIndex. Re-searching on every keystroke
@@ -1982,16 +2006,9 @@
                                             _completedChunkStart + 1,
                                         ),
                                     );
-                                    // Only count this chunk's progress if it
-                                    // hasn't been rated yet in this review pass.
-                                    // Prevents loaded digits, backspace-spam,
-                                    // and manual Shift+ratings from inflating
-                                    // the progress bar and daily goal.
-                                    if (!_blockRatings[_bn] || _blockRatings[_bn][_completedChunkStart] === undefined) {
-                                        blockProgress[_bn] =
-                                            (blockProgress[_bn] || 0) +
-                                            _gs_z;
-                                    }
+                                    blockProgress[_bn] =
+                                        (blockProgress[_bn] || 0) +
+                                        _gs_z;
                                     // If the block is now fully typed,
                                     // finalise it as a study block.
                                     if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
@@ -3048,18 +3065,22 @@
                             const tipHtml = `<b>${digitCount}</b> digit${digitCount === 1 ? "" : "s"} typed<br>${dateStr}`;
                             cell.addEventListener("mouseenter", (e) => _showTooltip(e, tipHtml));
                             cell.addEventListener("mouseleave", _hideTooltip);
-                            // Right-click to edit this day's digit count
-                            cell.addEventListener("contextmenu", (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                hidePiContextMenu();
-                                const menu = document.getElementById("piContextMenu");
-                                if (!menu) return;
-                                const h = menu.querySelector(".pi-context-header");
-                                if (h) h.textContent = `Daily Heatmap — ${key}`;
-                                const info = menu.querySelector(".pi-context-info");
-                                if (info) info.textContent = `Digits: ${digitCount}`;
-                                const daysInput = document.getElementById("piContextDays");
+                             // Right-click to edit this day's digit count
+                             cell.addEventListener("contextmenu", (e) => {
+                                 e.preventDefault();
+                                 e.stopPropagation();
+                                 hidePiContextMenu();
+                                 const menu = document.getElementById("piContextMenu");
+                                 if (!menu) return;
+                                 const h = menu.querySelector(".pi-context-header");
+                                 if (h) h.textContent = `Daily Heatmap — ${key}`;
+                                 const info = menu.querySelector(".pi-context-info");
+                                 if (info) info.textContent = `Digits: ${digitCount}`;
+                                 const labelEl = menu.querySelector(".pi-context-row label");
+                                 const spanEl = menu.querySelector(".pi-context-row span");
+                                 if (labelEl) labelEl.textContent = "Digits";
+                                 if (spanEl) spanEl.style.display = "none";
+                                 const daysInput = document.getElementById("piContextDays");
                                 if (daysInput) {
                                     daysInput.value = digitCount;
                                     daysInput.disabled = false;
@@ -3352,12 +3373,14 @@
                             // — render empty and don't compute due stats.
                             cell.style.background = pcEmpty;
                         } else {
-                            const dueMs = new Date(card.dueDate + "T00:00:00").getTime();
+                            const _blockDate = studyBlockData[blockForPos(p)]?.dueDate;
+                            const effectiveDate = _blockDate || card.dueDate;
+                            const dueMs = new Date(effectiveDate + "T00:00:00").getTime();
                             const todayMs = new Date(today + "T00:00:00").getTime();
                             daysUntilDue = isNaN(dueMs)
                                 ? 0
                                 : Math.round((dueMs - todayMs) / 86400000);
-                            dueDateStr = card.dueDate;
+                            dueDateStr = effectiveDate;
 
                             if (piCoverageMode === "ease") {
                                 // Color by ease factor: 1.3 (hardest) → 4.0 (easiest)
@@ -3539,6 +3562,11 @@
                     const removeBtn = document.getElementById("piContextRemove");
                     // Reset button text in case the block context menu changed it
                     if (removeBtn) removeBtn.textContent = "Remove from Deck";
+                    // Restore heatmap-adjusted labels
+                    const rowLabel = menu.querySelector(".pi-context-row label");
+                    const rowSpan = menu.querySelector(".pi-context-row span");
+                    if (rowLabel) rowLabel.textContent = "Due in";
+                    if (rowSpan) rowSpan.style.display = "";
 
                     if (header) {
                         header.textContent = `Image #${groupNum} · Position #${pos + 1}`;
@@ -3844,34 +3872,28 @@
                                 // Jump to the block's start position
                                 const { start } = blockRange(n);
                                 const target = snapToGroupStart(start);
-                                piInput.value = PI_DIGITS.substr(0, target);
-                                sequenceStartIndex = 0;
-                                // Set credit state so digits aren't
-                                // re-counted toward the daily goal.
-                                dailyCreditedSeqStart = 0;
-                                dailyCreditedMaxLength = target;
-                                piInput.dispatchEvent(
-                                    new Event("input"),
-                                );
-                                piInput.focus();
-                            } else {
-                                // Add new: jump to current frontier position
-                                const _srsPosA = Object.keys(srsData).map(Number);
-                                const _maxP = _srsPosA.length > 0 ? Math.max(..._srsPosA) : 0;
-                                const target = _maxP + getGroupSizeForMode(
-                                    getModeForPos(Math.max(1, _maxP + 1)),
-                                );
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
-                                 // Prevent re-crediting digits that were
-                                 // already typed (saved in credit state).
-                                 dailyCreditedSeqStart = 0;
-                                 dailyCreditedMaxLength = target;
+                                 skipProcessing = true;
                                  piInput.dispatchEvent(
                                      new Event("input"),
                                  );
                                  piInput.focus();
-                            }
+                             } else {
+                                 // Add new: jump to current frontier position
+                                 const _srsPosA = Object.keys(srsData).map(Number);
+                                 const _maxP = _srsPosA.length > 0 ? Math.max(..._srsPosA) : 0;
+                                 const target = _maxP + getGroupSizeForMode(
+                                     getModeForPos(Math.max(1, _maxP + 1)),
+                                 );
+                                 piInput.value = PI_DIGITS.substr(0, target);
+                                 sequenceStartIndex = 0;
+                                 skipProcessing = true;
+                                 piInput.dispatchEvent(
+                                     new Event("input"),
+                                 );
+                                 piInput.focus();
+                             }
                         });
                     });
                 }
