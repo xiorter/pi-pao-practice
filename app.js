@@ -93,6 +93,7 @@
                 let browseRateRedo = []; // [{ pos, newCard, isDue, rating }]
 
                 let _blockRatings = {};
+                let _blockProgressDate = ""; // tracks which day blockProgress belongs to
                 const SEV_W_AGAIN = 2, SEV_W_HARD = 1, SEV_W_GOOD = 0, SEV_W_EASY = 0;
                 const SEV_THRESH_EASY = 0, SEV_THRESH_GOOD = 0.08, SEV_THRESH_HARD = 0.25;
 
@@ -1774,19 +1775,35 @@
                         skipProcessing = false;
                         sequenceStartIndex = 0;
                         currentInputLength = val.length;
+                        // Record a Good rating for every loaded chunk so the
+                        // auto-Good path doesn't fire when the user types.
+                        let _sp = 0;
+                        while (_sp < val.length) {
+                            const _sMode = getModeForPos(_sp + 1);
+                            const _sGs = getGroupSizeForMode(_sMode);
+                            if (_sGs > val.length - _sp) break;
+                            const _sBn = blockForPos(_sp);
+                            if (!_blockRatings[_sBn]) _blockRatings[_sBn] = {};
+                            if (_blockRatings[_sBn][_sp] === undefined) {
+                                _blockRatings[_sBn][_sp] = 3;
+                            }
+                            _sp += _sGs;
+                        }
+                        // Render the display
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
                         if (outputDiv) {
-                            outputDiv.innerHTML = "";
-                            outputDiv.classList.toggle("mode-323", currentPAOMode === "323");
-                            let p = 0;
-                            while (p < val.length) {
-                                const mode = getModeForPos(p + 1);
-                                const gs = getGroupSizeForMode(mode);
-                                if (p + gs > val.length) break;
-                                outputDiv.innerHTML += `<span class="digit-group" style="color:var(--text-color);text-shadow:var(--text-outline-shadow);letter-spacing:0.04em;">${val.substr(p, gs)}</span>`;
-                                p += gs;
+                            let h = "";
+                            let _sp2 = 0;
+                            while (_sp2 < val.length) {
+                                const _sMode = getModeForPos(_sp2 + 1);
+                                const _sGs = getGroupSizeForMode(_sMode);
+                                if (_sGs > val.length - _sp2) break;
+                                h += `<span class="digit-group" style="color:${correctColor};text-shadow:var(--text-outline-shadow);letter-spacing:0.04em;">${val.substr(_sp2, _sGs)}</span>`;
+                                _sp2 += _sGs;
                             }
+                            outputDiv.innerHTML = h;
+                            outputDiv.classList.toggle("mode-323", currentPAOMode === "323");
                         }
                         const posEl = document.getElementById("position");
                         if (posEl) {
@@ -3222,7 +3239,7 @@
                                             )) /
                                             86400000,
                                     );
-                                    label += ` ${over}d`;
+                                    label += ` -${over}d`;
                                 } else if (_bd.dueDate === _today) {
                                     label += " 0d";
                                 } else {
@@ -3423,9 +3440,14 @@
                         pcStatsTotal++;
                         if (_cellIsNotAdded) {
                             pcStatsNotAdded++;
-                        } else if (daysUntilDue < 0) {
-                            pcStatsOverdue++;
-                        }
+                             } else if (daysUntilDue < 0) {
+                                 pcStatsOverdue++;
+                             }
+                             // Light tint for chunks rated in this review pass
+                             const _ratedThisPass = _blockRatings[currentBlock] && _blockRatings[currentBlock][cellPos] !== undefined;
+                             if (_ratedThisPass && cardInReviewDeck) {
+                                 cell.style.background = "rgba(255,255,200,0.15)";
+                             }
 
                         // Build hover popup with images (like test mode)
                         if (d) {
@@ -3846,6 +3868,12 @@
 
                 function renderChecklist() {
                     const today = srsToday();
+                    // Daily reset for block progress and ratings
+                    if (_blockProgressDate !== today) {
+                        _blockProgressDate = today;
+                        blockProgress = {};
+                        _blockRatings = {};
+                    }
                     const el = document.getElementById("blockChecklist");
                     if (!el) return;
                     // Collect due blocks
