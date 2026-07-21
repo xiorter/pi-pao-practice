@@ -874,7 +874,7 @@ input[type="text"]#piInput:focus {
     color: var(--stats-text-faint);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 .stats-heatmap {
     overflow-x: auto;
@@ -886,8 +886,8 @@ input[type="text"]#piInput:focus {
     display: flex;
     align-items: center;
     position: relative;
-    margin-bottom: 8px;
-    min-height: 36px;
+    margin-bottom: 4px;
+    min-height: 28px;
 }
 .stats-heatmap-year-nav {
     display: flex;

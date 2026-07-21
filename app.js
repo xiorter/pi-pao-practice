@@ -1982,9 +1982,16 @@
                                             _completedChunkStart + 1,
                                         ),
                                     );
-                                    blockProgress[_bn] =
-                                        (blockProgress[_bn] || 0) +
-                                        _gs_z;
+                                    // Only count this chunk's progress if it
+                                    // hasn't been rated yet in this review pass.
+                                    // Prevents loaded digits, backspace-spam,
+                                    // and manual Shift+ratings from inflating
+                                    // the progress bar and daily goal.
+                                    if (!_blockRatings[_bn] || _blockRatings[_bn][_completedChunkStart] === undefined) {
+                                        blockProgress[_bn] =
+                                            (blockProgress[_bn] || 0) +
+                                            _gs_z;
+                                    }
                                     // If the block is now fully typed,
                                     // finalise it as a study block.
                                     if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
@@ -3041,13 +3048,59 @@
                             const tipHtml = `<b>${digitCount}</b> digit${digitCount === 1 ? "" : "s"} typed<br>${dateStr}`;
                             cell.addEventListener("mouseenter", (e) => _showTooltip(e, tipHtml));
                             cell.addEventListener("mouseleave", _hideTooltip);
-                            // Right-click to reset digit count for this day
+                            // Right-click to edit this day's digit count
                             cell.addEventListener("contextmenu", (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                delete dailyStats[key];
-                                saveSettings();
-                                renderHeatmap();
+                                hidePiContextMenu();
+                                const menu = document.getElementById("piContextMenu");
+                                if (!menu) return;
+                                const h = menu.querySelector(".pi-context-header");
+                                if (h) h.textContent = `Daily Heatmap — ${key}`;
+                                const info = menu.querySelector(".pi-context-info");
+                                if (info) info.textContent = `Digits: ${digitCount}`;
+                                const daysInput = document.getElementById("piContextDays");
+                                if (daysInput) {
+                                    daysInput.value = digitCount;
+                                    daysInput.disabled = false;
+                                }
+                                const applyBtn = document.getElementById("piContextApply");
+                                if (applyBtn) {
+                                    applyBtn.onclick = (ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        const n = parseInt(document.getElementById("piContextDays").value) || 0;
+                                        if (n > 0) dailyStats[key] = n;
+                                        else delete dailyStats[key];
+                                        saveSettings();
+                                        renderHeatmap();
+                                        hidePiContextMenu();
+                                    };
+                                }
+                                const todayBtn = document.getElementById("piContextToday");
+                                if (todayBtn) {
+                                    todayBtn.textContent = "Reset to 0";
+                                    todayBtn.onclick = (ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        delete dailyStats[key];
+                                        saveSettings();
+                                        renderHeatmap();
+                                        hidePiContextMenu();
+                                    };
+                                }
+                                const removeBtn = document.getElementById("piContextRemove");
+                                if (removeBtn) removeBtn.style.display = "none";
+                                menu.style.display = "block";
+                                const pad = 4;
+                                const mw = menu.offsetWidth || 240;
+                                const mh = menu.offsetHeight || 160;
+                                let x = e.clientX;
+                                let y = e.clientY;
+                                if (x + mw + pad > window.innerWidth) x = window.innerWidth - mw - pad;
+                                if (y + mh + pad > window.innerHeight) y = window.innerHeight - mh - pad;
+                                menu.style.left = x + "px";
+                                menu.style.top = y + "px";
                             });
                         }
 
@@ -3808,13 +3861,16 @@
                                 const target = _maxP + getGroupSizeForMode(
                                     getModeForPos(Math.max(1, _maxP + 1)),
                                 );
-                                piInput.value = PI_DIGITS.substr(0, target);
-                                sequenceStartIndex = 0;
-                                // Prevent re-crediting digits that were
-                                // already typed (saved in credit state).
-                                dailyCreditedSeqStart = 0;
-                                dailyCreditedMaxLength = target;
-                                piInput.focus();
+                                 piInput.value = PI_DIGITS.substr(0, target);
+                                 sequenceStartIndex = 0;
+                                 // Prevent re-crediting digits that were
+                                 // already typed (saved in credit state).
+                                 dailyCreditedSeqStart = 0;
+                                 dailyCreditedMaxLength = target;
+                                 piInput.dispatchEvent(
+                                     new Event("input"),
+                                 );
+                                 piInput.focus();
                             }
                         });
                     });
