@@ -1281,16 +1281,14 @@
                         <div class="stats-heatmap-title">
                             Daily Heatmap
                         </div>
-                        <div class="stats-heatmap-nav-row">
-                            <div class="stats-heatmap-year-nav">
+                        <div id="statsHeatmap" class="stats-heatmap"></div>
+                        <div class="stats-heatmap-nav-row" style="justify-content:center;margin-top:6px;">
+                            <div class="stats-heatmap-year-nav" style="position:static;transform:none;">
                                 <button class="stats-heatmap-nav-btn" id="heatmapPrevYear">←</button>
-                                <span id="heatmapYear" class="stats-heatmap-year"></span>
+                                <button class="stats-heatmap-nav-btn" id="heatmapTodayBtn" style="width:28px;height:28px;border-radius:50%;font-size:0.6rem;">●</button>
                                 <button class="stats-heatmap-nav-btn" id="heatmapNextYear">→</button>
                             </div>
-                            <div class="stats-heatmap-mode-selector" style="display:none">
-                            </div>
                         </div>
-                        <div id="statsHeatmap" class="stats-heatmap"></div>
                     </div>
 
                     <!-- Stat row, immediately below heatmap -->

@@ -1776,16 +1776,22 @@
                         currentInputLength = val.length;
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
-                        // Render loaded digits (just inline spans, no chunk logic)
                         if (outputDiv) {
-                            let h = "";
-                            for (let i = 0; i < val.length; i += 6) {
-                                h += `<span class="digit-group">${val.substr(i, 6)}</span>`;
+                            outputDiv.innerHTML = "";
+                            outputDiv.classList.toggle("mode-323", currentPAOMode === "323");
+                            let p = 0;
+                            while (p < val.length) {
+                                const mode = getModeForPos(p + 1);
+                                const gs = getGroupSizeForMode(mode);
+                                if (p + gs > val.length) break;
+                                outputDiv.innerHTML += `<span class="digit-group" style="color:var(--text-color);text-shadow:var(--text-outline-shadow);letter-spacing:0.04em;">${val.substr(p, gs)}</span>`;
+                                p += gs;
                             }
-                            outputDiv.innerHTML = h;
                         }
                         const posEl = document.getElementById("position");
-                        if (posEl) posEl.innerHTML = `#1 → #${val.length} (${val.length})`;
+                        if (posEl) {
+                            posEl.innerHTML = val.length > 0 ? `#1 → #${val.length} (${val.length})` : "";
+                        }
                         if (outputContainer) outputContainer.scrollTop = outputContainer.scrollHeight;
                         return;
                     }
@@ -1991,24 +1997,30 @@
                                     // deck if it has no card yet — first-time
                                     // typing creates a learning-state card.
                                     // Subsequent typings just get reviewed.
-                                    if (!srsData[_completedChunkStart]) {
-                                        srsAddCard(_completedChunkStart);
-                                    }
-                                    if (!currentChunkMistakePressed) {
-                                        srsRate(_completedChunkStart, 3, null); // Good
-                                    }
-                                    // Track block progress for the daily goal.
-                                    const _bn = blockForPos(
-                                        _completedChunkStart,
-                                    );
-                                    const _gs_z = getGroupSizeForMode(
-                                        getModeForPos(
-                                            _completedChunkStart + 1,
-                                        ),
-                                    );
-                                    blockProgress[_bn] =
-                                        (blockProgress[_bn] || 0) +
-                                        _gs_z;
+                                     if (!srsData[_completedChunkStart]) {
+                                         srsAddCard(_completedChunkStart);
+                                     }
+                                     const _bn = blockForPos(
+                                         _completedChunkStart,
+                                     );
+                                     const _gs_z = getGroupSizeForMode(
+                                         getModeForPos(
+                                             _completedChunkStart + 1,
+                                         ),
+                                     );
+                                     // Only auto-Good and count progress if
+                                     // this chunk hasn't been manually rated
+                                     // (Shift+1-4) yet in this review pass.
+                                     const _alreadyRated = _blockRatings[_bn] &&
+                                         _blockRatings[_bn][_completedChunkStart] !== undefined;
+                                     if (!_alreadyRated && !currentChunkMistakePressed) {
+                                         srsRate(_completedChunkStart, 3, null); // Good
+                                     }
+                                     if (!_alreadyRated) {
+                                         blockProgress[_bn] =
+                                             (blockProgress[_bn] || 0) +
+                                             _gs_z;
+                                     }
                                     // If the block is now fully typed,
                                     // finalise it as a study block.
                                     if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
@@ -3073,9 +3085,9 @@
                                  const menu = document.getElementById("piContextMenu");
                                  if (!menu) return;
                                  const h = menu.querySelector(".pi-context-header");
-                                 if (h) h.textContent = `Daily Heatmap — ${key}`;
+                                 if (h) h.textContent = `${key.substr(8,2)}/${key.substr(5,2)}/${key.substr(2,2)}`;
                                  const info = menu.querySelector(".pi-context-info");
-                                 if (info) info.textContent = `Digits: ${digitCount}`;
+                                 if (info) info.style.display = "none";
                                  const labelEl = menu.querySelector(".pi-context-row label");
                                  const spanEl = menu.querySelector(".pi-context-row span");
                                  if (labelEl) labelEl.textContent = "Digits";
@@ -3241,8 +3253,15 @@
                             _labelCell.addEventListener("contextmenu", (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                hidePiContextMenu();
-                                // Show block context menu
+                                 hidePiContextMenu();
+                                 // Restore labels in case heatmap menu changed them
+                                 const _rowL = document.querySelector(".pi-context-row label");
+                                 const _rowS = document.querySelector(".pi-context-row span");
+                                 if (_rowL) _rowL.textContent = "Due in";
+                                 if (_rowS) _rowS.style.display = "";
+                                 const _rowI = document.querySelector(".pi-context-info");
+                                 if (_rowI) _rowI.style.display = "";
+                                 // Show block context menu
                                 const menu = document.getElementById("piContextMenu");
                                 if (!menu) return;
                                 const _bd = studyBlockData[_thisBlock];
@@ -3567,6 +3586,7 @@
                     const rowSpan = menu.querySelector(".pi-context-row span");
                     if (rowLabel) rowLabel.textContent = "Due in";
                     if (rowSpan) rowSpan.style.display = "";
+                    if (info) info.style.display = "";
 
                     if (header) {
                         header.textContent = `Image #${groupNum} · Position #${pos + 1}`;
@@ -3579,14 +3599,20 @@
                                 (card.step === undefined || card.step < 0);
                             if (!_crd) {
                                 info.textContent = "In learning";
-                            } else {
-                                const ease = card.easeFactor || 2.5;
-                                info.textContent = `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? "s" : ""} · Ease ${ease.toFixed(2)}`;
-                            }
+                             } else {
+                                 const ease = card.easeFactor || 2.5;
+                                 if (daysUntilDue < 0) {
+                                     info.textContent = `Overdue ${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) !== 1 ? "s" : ""} · Ease ${ease.toFixed(2)}`;
+                                 } else if (daysUntilDue === 0) {
+                                     info.textContent = `Due today · Ease ${ease.toFixed(2)}`;
+                                 } else {
+                                     info.textContent = `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? "s" : ""} · Ease ${ease.toFixed(2)}`;
+                                 }
+                             }
                         }
                     }
                     if (daysInput) {
-                        daysInput.value = Math.max(0, daysUntilDue);
+                        daysInput.value = daysUntilDue < 0 ? daysUntilDue : Math.max(0, daysUntilDue);
                         daysInput.disabled = false;
                     }
                     if (applyBtn) applyBtn.disabled = false;
@@ -3858,8 +3884,7 @@
                     const _frDigits = _frE - _frS + 1;
                     const _frTyped = blockProgress[frontier] || 0;
                     const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
-                    html += (due.length > 0 ? `<div class="frontier-sep"></div>` : ``) +
-                        `<div class="checklist-entry" data-action="add">` +
+                    html += `<div class="checklist-entry" data-action="add">` +
                         `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
                         `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})</div></div>`;
                     el.innerHTML = html;
@@ -3994,6 +4019,8 @@
                         const nextBtn = document.getElementById("heatmapNextYear");
                         if (prevBtn) prevBtn.addEventListener("click", () => { heatmapViewYear--; renderHeatmap(); });
                         if (nextBtn) nextBtn.addEventListener("click", () => { heatmapViewYear++; renderHeatmap(); });
+                        const todayBtn = document.getElementById("heatmapTodayBtn");
+                        if (todayBtn) todayBtn.addEventListener("click", () => { heatmapViewYear = new Date().getFullYear(); renderHeatmap(); });
 
                         // Heatmap colour scheme dropdown
                         const schemeSel =
@@ -6779,17 +6806,28 @@
                                     imagesModal.style.display = "none";
                                     openFlashcards(practiceIndex);
                                 }
-                                // Shift+1-4: manually rate the current typing chunk
-                                if (e.shiftKey && currentTypingChunkPos >= 0) {
-                                    const rk = e.key === "1" ? 1 : e.key === "2" ? 2 : e.key === "3" ? 3 : e.key === "4" ? 4 : 0;
-                                    if (rk) {
-                                        e.preventDefault();
-                                        srsRate(currentTypingChunkPos, rk, null);
-                                        srsUpdateBadge();
-                                        saveSettings();
-                                        showToast("Chunk rated " + (rk === 1 ? "Again" : rk === 2 ? "Hard" : rk === 3 ? "Good" : "Easy"));
-                                    }
-                                }
+                                 // Shift+1-4: manually rate the current typing chunk
+                                 if (e.shiftKey && currentTypingChunkPos >= 0) {
+                                     const rk = e.key === "1" ? 1 : e.key === "2" ? 2 : e.key === "3" ? 3 : e.key === "4" ? 4 : 0;
+                                     if (rk) {
+                                         e.preventDefault();
+                                         // Push undo snapshot
+                                         mistakeUndoStack.push({
+                                             pos: currentTypingChunkPos,
+                                             oldCard: srsData[currentTypingChunkPos]
+                                                 ? { ...srsData[currentTypingChunkPos] }
+                                                 : null,
+                                             digits: PI_DIGITS.substr(currentTypingChunkPos, getGroupSizeForMode(getModeForPos(currentTypingChunkPos + 1))),
+                                             rating: rk,
+                                         });
+                                         if (mistakeUndoStack.length > 20) mistakeUndoStack.shift();
+                                         mistakeRedoStack = [];
+                                         srsRate(currentTypingChunkPos, rk, null);
+                                         srsUpdateBadge();
+                                         saveSettings();
+                                         showToast("Chunk rated " + (rk === 1 ? "Again" : rk === 2 ? "Hard" : rk === 3 ? "Good" : "Easy"));
+                                     }
+                                 }
                                 // Everest hotkey: toggle Everest modal
                                 if (e.key.toUpperCase() === everestHotkey) {
                                     e.preventDefault();
