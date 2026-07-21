@@ -2,7 +2,7 @@
 
 A browser-based tool for memorising the digits of **pi** using the **PAO (Person-Action-Object)** memory system and spaced repetition.
 
-➡️ **[Try it live →](https://xiorter.github.io/pi-pao-practice/)**
+**[Try it live →](https://xiorter.github.io/pi-pao-practice/)**
 
 ---
 
