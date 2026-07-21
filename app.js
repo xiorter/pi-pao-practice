@@ -82,6 +82,7 @@
                 let currentTypingChunkPos = -1; // 0-based start of the chunk the user is in
                 let currentChunkMistakePressed = false; // true if M was pressed for this chunk
                 let currentChunkLastRating = 0; // 0=none, 1=Again, 4=Hard
+                let _skipLoadMax = 0; // tracks max pos loaded by skipProcessing
                 // Undo/Redo stacks for manual/auto mistakes added outside the SRS modal
                 let mistakeUndoStack = []; // [{ pos, oldCard }]
                 let mistakeRedoStack = []; // [{ pos, newCard }]
@@ -479,7 +480,7 @@
                 let dailyStats = {}; // { "2026-06-21": correctDigitCount }
                 let studyBlockSize = 25; // chunks per study block (default 25)
                 let studyBlockData = {}; // { blockNum: { start, end, dueDate, interval, easeFactor, reviews, lapses } }
-                let blockProgress = {}; // { blockNum: digitsTypedSoFar }
+                let blockProgress = {}; // { blockNum: chunksTypedToday }
                 let studyBlocksMigrated = false;
                 let skipProcessing = false; // set true to load digits without rating/crediting
                 let posTypedDates = {}; // { chunkStartPos: "YYYY-MM-DD" } — last date a chunk was completed
@@ -1775,20 +1776,10 @@
                         skipProcessing = false;
                         sequenceStartIndex = 0;
                         currentInputLength = val.length;
-                        // Record a Good rating for every loaded chunk so the
-                        // auto-Good path doesn't fire when the user types.
-                        let _sp = 0;
-                        while (_sp < val.length) {
-                            const _sMode = getModeForPos(_sp + 1);
-                            const _sGs = getGroupSizeForMode(_sMode);
-                            if (_sGs > val.length - _sp) break;
-                            const _sBn = blockForPos(_sp);
-                            if (!_blockRatings[_sBn]) _blockRatings[_sBn] = {};
-                            if (_blockRatings[_sBn][_sp] === undefined) {
-                                _blockRatings[_sBn][_sp] = 3;
-                            }
-                            _sp += _sGs;
-                        }
+                        // Track how much was pre-loaded so the auto-Good path
+                        // below skips these positions (they were already rated
+                        // when first typed in a previous session).
+                        _skipLoadMax = val.length;
                         // Render the display
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
@@ -2025,41 +2016,43 @@
                                              _completedChunkStart + 1,
                                          ),
                                      );
-                                     // Only auto-Good and count progress if
-                                     // this chunk hasn't been manually rated
-                                     // (Shift+1-4) yet in this review pass.
-                                     const _alreadyRated = _blockRatings[_bn] &&
-                                         _blockRatings[_bn][_completedChunkStart] !== undefined;
-                                     if (!_alreadyRated && !currentChunkMistakePressed) {
-                                         srsRate(_completedChunkStart, 3, null); // Good
+                                      // Only auto-Good and count progress if
+                                      // this chunk hasn't been manually rated
+                                      // (Shift+1-4) yet in this review pass, and
+                                      // wasn't pre-loaded via skipProcessing.
+                                      const _alreadyRated = _blockRatings[_bn] &&
+                                          _blockRatings[_bn][_completedChunkStart] !== undefined;
+                                      const _wasPreLoaded = _completedChunkStart < _skipLoadMax;
+                                      if (!_alreadyRated && !_wasPreLoaded && !currentChunkMistakePressed) {
+                                          srsRate(_completedChunkStart, 3, null); // Good
+                                          _blockRatings[_bn] = _blockRatings[_bn] || {};
+                                          _blockRatings[_bn][_completedChunkStart] = 3;
+                                      }
+                                      if (!_alreadyRated && !_wasPreLoaded) {
+                                          blockProgress[_bn] =
+                                              (blockProgress[_bn] || 0) + 1;
+                                      }
+                                     // If the block is now fully typed,
+                                     // finalise it as a study block.
+                                     if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
+                                         const { start: _bS, end: _bE } = blockRange(_bn);
+                                         studyBlockData[_bn] = {
+                                             start: _bS,
+                                             end: _bE,
+                                             dueDate: srsToday(),
+                                             interval: 0,
+                                             easeFactor: 2.5,
+                                             reviews: 0,
+                                             lapses: 0,
+                                         };
+                                         syncBlockDueDates();
+                                         saveSettings();
                                      }
-                                     if (!_alreadyRated) {
-                                         blockProgress[_bn] =
-                                             (blockProgress[_bn] || 0) +
-                                             _gs_z;
+                                     if (studyBlockData[_bn]) {
+                                         if (blockProgress[_bn] >= studyBlockSize) {
+                                             rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
+                                         }
                                      }
-                                    // If the block is now fully typed,
-                                    // finalise it as a study block.
-                                    if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
-                                        const { start: _bS, end: _bE } = blockRange(_bn);
-                                        studyBlockData[_bn] = {
-                                            start: _bS,
-                                            end: _bE,
-                                            dueDate: srsToday(),
-                                            interval: 0,
-                                            easeFactor: 2.5,
-                                            reviews: 0,
-                                            lapses: 0,
-                                        };
-                                        syncBlockDueDates();
-                                        saveSettings();
-                                    }
-                                    if (studyBlockData[_bn]) {
-                                        const { start: _bS, end: _bE } = blockRange(_bn);
-                                        if (blockProgress[_bn] >= _bE - _bS + 1) {
-                                            rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
-                                        }
-                                    }
                                     srsUpdateBadge();
                                 }
                                 posTypedDates[_completedChunkStart] = srsToday();
@@ -3101,6 +3094,9 @@
                                  hidePiContextMenu();
                                  const menu = document.getElementById("piContextMenu");
                                  if (!menu) return;
+                                 // Reset row visibility (may have been hidden by block menu)
+                                 const _hmRowDiv = document.querySelector(".pi-context-row");
+                                 if (_hmRowDiv) _hmRowDiv.style.display = "";
                                  const h = menu.querySelector(".pi-context-header");
                                  if (h) h.textContent = `${key.substr(8,2)}/${key.substr(5,2)}/${key.substr(2,2)}`;
                                  const info = menu.querySelector(".pi-context-info");
@@ -3268,80 +3264,94 @@
                                 "font-size:0.55rem;color:#888;white-space:nowrap;padding-right:2px;display:flex;align-items:center;height:12px;cursor:pointer;";
                             _labelCell.title = "Right-click to change due date";
                             _labelCell.addEventListener("contextmenu", (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                 hidePiContextMenu();
-                                 // Restore labels in case heatmap menu changed them
-                                 const _rowL = document.querySelector(".pi-context-row label");
-                                 const _rowS = document.querySelector(".pi-context-row span");
-                                 if (_rowL) _rowL.textContent = "Due in";
-                                 if (_rowS) _rowS.style.display = "";
-                                 const _rowI = document.querySelector(".pi-context-info");
-                                 if (_rowI) _rowI.style.display = "";
+                                 e.preventDefault();
+                                 e.stopPropagation();
+                                  hidePiContextMenu();
+                                  // Restore labels in case heatmap menu changed them
+                                  const _rowL = document.querySelector(".pi-context-row label");
+                                  const _rowS = document.querySelector(".pi-context-row span");
+                                  const _rowDiv = document.querySelector(".pi-context-row");
+                                  if (_rowL) _rowL.textContent = "Due in";
+                                  if (_rowS) _rowS.style.display = "";
+                                  if (_rowDiv) _rowDiv.style.display = "";
+                                  const _rowI = document.querySelector(".pi-context-info");
+                                  if (_rowI) _rowI.style.display = "";
+                                  // Reset apply and today button visibility
+                                  const _resetApply = document.getElementById("piContextApply");
+                                  const _resetToday = document.getElementById("piContextToday");
+                                  if (_resetApply) _resetApply.style.display = "";
+                                  if (_resetToday) _resetToday.style.display = "";
                                  // Show block context menu
                                 const menu = document.getElementById("piContextMenu");
                                 if (!menu) return;
-                                const _bd = studyBlockData[_thisBlock];
-                                const _h = menu.querySelector(".pi-context-header");
-                                if (_h) _h.textContent = `Block ${_thisBlock + 1}`;
-                                const _info = menu.querySelector(".pi-context-info");
-                                if (_info) {
-                                    if (_bd) {
-                                        const _dueMs = new Date(_bd.dueDate + "T00:00:00");
-                                        const _todayMs = new Date(srsToday() + "T00:00:00");
-                                        const _diff = Math.round((_dueMs - _todayMs) / 86400000);
-                                        if (_diff < 0) { _info.textContent = `Overdue ${Math.abs(_diff)} day${Math.abs(_diff) !== 1 ? "s" : ""}`; }
-                                        else if (_diff === 0) { _info.textContent = "Due today"; }
-                                        else { _info.textContent = `Due in ${_diff} day${_diff !== 1 ? "s" : ""}`; }
-                                    } else {
-                                        _info.textContent = "Not scheduled";
-                                    }
-                                }
-                                const _daysInput = document.getElementById("piContextDays");
-                                if (_daysInput) {
-                                    if (_bd) {
-                                        const _dueMs = new Date(_bd.dueDate + "T00:00:00");
-                                        const _todayMs = new Date(srsToday() + "T00:00:00");
-                                        _daysInput.value = Math.round((_dueMs - _todayMs) / 86400000);
-                                    } else {
-                                        _daysInput.value = 1;
-                                    }
-                                    _daysInput.disabled = false;
-                                }
-                                const _apply = document.getElementById("piContextApply");
-                                if (_apply) {
-                                    _apply.onclick = (ev) => {
-                                        ev.preventDefault();
-                                        ev.stopPropagation();
-                                        const _d = Math.max(0, parseInt(document.getElementById("piContextDays").value) || 1);
-                                        if (studyBlockData[_thisBlock]) {
-                                            studyBlockData[_thisBlock].dueDate = srsDaysFromNow(_d);
-                                            blockProgress[_thisBlock] = 0;
-                                            syncBlockDueDates();
-                                            saveSettings();
-                                            renderPiCoverage();
-                                            updateGoalBarOnly();
-                                        }
-                                        hidePiContextMenu();
-                                    };
-                                }
-                                const _todayBtn = document.getElementById("piContextToday");
-                                if (_todayBtn) {
-                                    _todayBtn.textContent = "Due Today";
-                                    _todayBtn.onclick = (ev) => {
-                                        ev.preventDefault();
-                                        ev.stopPropagation();
-                                        if (studyBlockData[_thisBlock]) {
-                                            studyBlockData[_thisBlock].dueDate = srsToday();
-                                            blockProgress[_thisBlock] = 0;
-                                            syncBlockDueDates();
-                                            saveSettings();
-                                            renderPiCoverage();
-                                            updateGoalBarOnly();
-                                        }
-                                        hidePiContextMenu();
-                                    };
-                                }
+                                 const _bd = studyBlockData[_thisBlock];
+                                 const _isPartial = _bd && _bd.interval === 0;
+                                 const _h = menu.querySelector(".pi-context-header");
+                                 if (_h) _h.textContent = `Block ${_thisBlock + 1}`;
+                                 const _info = menu.querySelector(".pi-context-info");
+                                 if (_info) {
+                                     if (_bd) {
+                                         const _dueMs = new Date(_bd.dueDate + "T00:00:00");
+                                         const _todayMs = new Date(srsToday() + "T00:00:00");
+                                         const _diff = Math.round((_dueMs - _todayMs) / 86400000);
+                                         if (_diff < 0) { _info.textContent = `Overdue ${Math.abs(_diff)} day${Math.abs(_diff) !== 1 ? "s" : ""}`; }
+                                         else if (_diff === 0) { _info.textContent = "Due today"; }
+                                         else { _info.textContent = `Due in ${_diff} day${_diff !== 1 ? "s" : ""}`; }
+                                     } else {
+                                         _info.textContent = "Not scheduled";
+                                     }
+                                 }
+                                 const _daysRow = document.querySelector(".pi-context-row");
+                                 if (_daysRow) _daysRow.style.display = _isPartial ? "none" : "";
+                                 const _daysInput = document.getElementById("piContextDays");
+                                 if (_daysInput) {
+                                     if (_bd) {
+                                         const _dueMs = new Date(_bd.dueDate + "T00:00:00");
+                                         const _todayMs = new Date(srsToday() + "T00:00:00");
+                                         _daysInput.value = Math.round((_dueMs - _todayMs) / 86400000);
+                                     } else {
+                                         _daysInput.value = 1;
+                                     }
+                                     _daysInput.disabled = false;
+                                 }
+                                 const _apply = document.getElementById("piContextApply");
+                                 if (_apply) {
+                                     if (_isPartial) { _apply.style.display = "none"; }
+                                     else { _apply.style.display = ""; }
+                                     _apply.onclick = (ev) => {
+                                         ev.preventDefault();
+                                         ev.stopPropagation();
+                                         const _d = Math.max(0, parseInt(document.getElementById("piContextDays").value) || 1);
+                                         if (studyBlockData[_thisBlock]) {
+                                             studyBlockData[_thisBlock].dueDate = srsDaysFromNow(_d);
+                                             blockProgress[_thisBlock] = 0;
+                                             syncBlockDueDates();
+                                             saveSettings();
+                                             renderPiCoverage();
+                                             updateGoalBarOnly();
+                                         }
+                                         hidePiContextMenu();
+                                     };
+                                 }
+                                 const _todayBtn = document.getElementById("piContextToday");
+                                 if (_todayBtn) {
+                                     if (_isPartial) { _todayBtn.style.display = "none"; }
+                                     else { _todayBtn.style.display = ""; }
+                                     _todayBtn.textContent = "Due Today";
+                                     _todayBtn.onclick = (ev) => {
+                                         ev.preventDefault();
+                                         ev.stopPropagation();
+                                         if (studyBlockData[_thisBlock]) {
+                                             studyBlockData[_thisBlock].dueDate = srsToday();
+                                             blockProgress[_thisBlock] = 0;
+                                             syncBlockDueDates();
+                                             saveSettings();
+                                             renderPiCoverage();
+                                             updateGoalBarOnly();
+                                         }
+                                         hidePiContextMenu();
+                                     };
+                                 }
                                 const _removeBtn = document.getElementById("piContextRemove");
                                 if (_removeBtn) {
                                     _removeBtn.textContent = "Done";
@@ -3436,18 +3446,27 @@
                                 }
                             }
                         }
-                        // Count stats AFTER daysUntilDue is known
-                        pcStatsTotal++;
-                        if (_cellIsNotAdded) {
-                            pcStatsNotAdded++;
-                             } else if (daysUntilDue < 0) {
-                                 pcStatsOverdue++;
-                             }
-                             // Light tint for chunks rated in this review pass
-                             const _ratedThisPass = _blockRatings[currentBlock] && _blockRatings[currentBlock][cellPos] !== undefined;
-                             if (_ratedThisPass && cardInReviewDeck) {
-                                 cell.style.background = "rgba(255,255,200,0.15)";
-                             }
+                         // Count stats AFTER daysUntilDue is known
+                         pcStatsTotal++;
+                         if (_cellIsNotAdded) {
+                             pcStatsNotAdded++;
+                         } else if (daysUntilDue < 0) {
+                             pcStatsOverdue++;
+                         }
+                         // White inner outline for cells belonging to a due
+                         // block that have NOT been completed today. Once a
+                         // chunk is rated (completed) in the current review
+                         // pass, the outline disappears. It returns when
+                         // progress resets the next day.
+                         const _bnCell = blockForPos(p);
+                         const _blockDue = studyBlockData[_bnCell]?.dueDate;
+                         const _isDueBlock = _blockDue && _blockDue <= today;
+                         const _compToday = _blockRatings[_bnCell] && _blockRatings[_bnCell][p] !== undefined;
+                         if (_isDueBlock && cardInReviewDeck && !_compToday) {
+                             cell.classList.add("pi-cov-due");
+                         } else if (_compToday) {
+                             cell.classList.add("pi-cov-done");
+                         }
 
                         // Build hover popup with images (like test mode)
                         if (d) {
@@ -3606,9 +3625,15 @@
                     // Restore heatmap-adjusted labels
                     const rowLabel = menu.querySelector(".pi-context-row label");
                     const rowSpan = menu.querySelector(".pi-context-row span");
+                    const _cellRowDiv = document.querySelector(".pi-context-row");
                     if (rowLabel) rowLabel.textContent = "Due in";
                     if (rowSpan) rowSpan.style.display = "";
+                    if (_cellRowDiv) _cellRowDiv.style.display = "";
                     if (info) info.style.display = "";
+                    const _cellApply = document.getElementById("piContextApply");
+                    const _cellToday = document.getElementById("piContextToday");
+                    if (_cellApply) _cellApply.style.display = "";
+                    if (_cellToday) _cellToday.style.display = "";
 
                     if (header) {
                         header.textContent = `Image #${groupNum} · Position #${pos + 1}`;
@@ -3894,10 +3919,9 @@
                     let html = "";
                     for (const bn of due) {
                         const { start, end } = blockRange(bn);
-                        const blockDigits = end - start + 1;
                         const typed = blockProgress[bn] || 0;
                         const pct = Math.min(100, Math.round(
-                            (typed / blockDigits) * 100,
+                            (typed / studyBlockSize) * 100,
                         ));
                         html +=
                             `<div class="checklist-entry" data-block="${bn}">` +
@@ -3909,9 +3933,8 @@
                     }
                     // Note about where add-new-chunks will start
                     const { start: _frS, end: _frE } = blockRange(frontier);
-                    const _frDigits = _frE - _frS + 1;
                     const _frTyped = blockProgress[frontier] || 0;
-                    const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
+                    const _frPct = Math.min(100, Math.round((_frTyped / studyBlockSize) * 100));
                     html += `<div class="checklist-entry" data-action="add">` +
                         `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
                         `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})</div></div>`;
@@ -3922,9 +3945,26 @@
                             const bn = item.dataset.block;
                             if (bn) {
                                 const n = parseInt(bn);
-                                // Jump to the block's start position
-                                const { start } = blockRange(n);
-                                const target = snapToGroupStart(start);
+                                // Jump to the furthest typed position
+                                // in this block (from SRS data).
+                                const { start, end } = blockRange(n);
+                                let _maxPosInBlock = start;
+                                let _pp = start;
+                                const _sChunkSize = () => {
+                                    const _m = getModeForPos(Math.min(_pp + 1, PI_DIGITS.length));
+                                    return getGroupSizeForMode(_m);
+                                };
+                                while (_pp <= end && _pp < PI_DIGITS.length) {
+                                    if (srsData[_pp]) {
+                                        _maxPosInBlock = _pp + _sChunkSize();
+                                    }
+                                    const _ss = _sChunkSize();
+                                    if (_ss <= 0) break;
+                                    _pp += _ss;
+                                }
+                                const target = snapToGroupStart(
+                                    Math.min(_maxPosInBlock, PI_DIGITS.length),
+                                );
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;
@@ -3936,9 +3976,10 @@
                                  // Add new: jump to current frontier position
                                  const _srsPosA = Object.keys(srsData).map(Number);
                                  const _maxP = _srsPosA.length > 0 ? Math.max(..._srsPosA) : 0;
-                                 const target = _maxP + getGroupSizeForMode(
-                                     getModeForPos(Math.max(1, _maxP + 1)),
+                                 const _gsAdd = getGroupSizeForMode(
+                                     getModeForPos(Math.max(1, _maxP)),
                                  );
+                                 const target = _maxP > 0 ? _maxP + _gsAdd : 0;
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;
@@ -6850,8 +6891,11 @@
                                          });
                                          if (mistakeUndoStack.length > 20) mistakeUndoStack.shift();
                                          mistakeRedoStack = [];
-                                         srsRate(currentTypingChunkPos, rk, null);
-                                         srsUpdateBadge();
+                                          srsRate(currentTypingChunkPos, rk, null);
+                                          const _bnS = blockForPos(currentTypingChunkPos);
+                                          _blockRatings[_bnS] = _blockRatings[_bnS] || {};
+                                          _blockRatings[_bnS][currentTypingChunkPos] = rk;
+                                          srsUpdateBadge();
                                          saveSettings();
                                          showToast("Chunk rated " + (rk === 1 ? "Again" : rk === 2 ? "Hard" : rk === 3 ? "Good" : "Easy"));
                                      }
@@ -6940,6 +6984,9 @@
                                         };
                                     }
                                     const _countedAsReview = srsRate(mistakePos, 1, srsIsDue(mistakePos)); // Again
+                                    const _bnM = blockForPos(mistakePos);
+                                    _blockRatings[_bnM] = _blockRatings[_bnM] || {};
+                                    _blockRatings[_bnM][mistakePos] = 1;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardAgain,
@@ -7001,6 +7048,9 @@
                                         };
                                     }
                                     const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
+                                    const _bnH = blockForPos(mistakePos);
+                                    _blockRatings[_bnH] = _blockRatings[_bnH] || {};
+                                    _blockRatings[_bnH][mistakePos] = 4;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardHard,
