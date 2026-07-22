@@ -1313,6 +1313,7 @@
                         studyBlockData = s.studyBlockData || {};
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
+                        _blockProgressDate = s._blockProgressDate || "";
                         currentScale = s.currentScale || "major";
                         currentWaveform = s.currentWaveform || "sine";
                         useCustomBg = s.useCustomBg ?? false;
@@ -1738,6 +1739,7 @@
                         studyBlockData,
                         studyBlocksMigrated,
                         blockProgress,
+                        _blockProgressDate,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -3386,17 +3388,20 @@
                                          // Frontier / partial block: show Reset
                                          _removeBtn.style.display = "";
                                          _removeBtn.textContent = "Reset";
-                                         _removeBtn.onclick = (ev) => {
-                                             ev.preventDefault();
-                                             ev.stopPropagation();
-                                             const { start, end } = blockRange(_thisBlock);
-                                             for (let _dpos = start; _dpos <= end; ) {
-                                                 delete srsData[_dpos];
-                                                 const _m = getModeForPos(_dpos + 1);
-                                                 const _g = getGroupSizeForMode(_m);
-                                                 _dpos += _g;
-                                             }
-                                             delete studyBlockData[_thisBlock];
+                                          _removeBtn.onclick = (ev) => {
+                                              ev.preventDefault();
+                                              ev.stopPropagation();
+                                              const { start, end } = blockRange(_thisBlock);
+                                              // Delete srsData entries by iterating keys
+                                              // (mode-independent — works even if mode
+                                              // changed since the chunk was typed).
+                                              const _del = [];
+                                              for (const _ps in srsData) {
+                                                  const _pn = parseInt(_ps);
+                                                  if (_pn >= start && _pn <= end) _del.push(_pn);
+                                              }
+                                              for (const _pn of _del) delete srsData[_pn];
+                                              delete studyBlockData[_thisBlock];
                                              blockProgress[_thisBlock] = 0;
                                              delete _blockRatings[_thisBlock];
                                              saveSettings();
