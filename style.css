@@ -1734,7 +1734,7 @@ input[type="number"] {
     position: fixed;
     left: 12px;
     top: 60px;
-    width: 240px;
+    width: 280px;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
     display: none;
@@ -1783,8 +1783,6 @@ input[type="number"] {
     min-width: 0;
 }
 #blockChecklist .checklist-text .checklist-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
 }

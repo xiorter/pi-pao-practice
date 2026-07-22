@@ -83,6 +83,7 @@
                 let currentChunkMistakePressed = false; // true if M was pressed for this chunk
                 let currentChunkLastRating = 0; // 0=none, 1=Again, 4=Hard
                 let _hintPos = 0; // hint position after skipProcessing load
+                let _lastSkipLength = 0; // prevent processing of just-loaded digits
                 // Undo/Redo stacks for manual/auto mistakes added outside the SRS modal
                 let mistakeUndoStack = []; // [{ pos, oldCard }]
                 let mistakeRedoStack = []; // [{ pos, newCard }]
@@ -1312,6 +1313,18 @@
                         studyBlockData = s.studyBlockData || {};
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
+                        // Migrate old chunk-count values (stored before
+                        // blockProgress tracked digits). If a value is less
+                        // than studyBlockSize it was a chunk count.
+                        for (const _bnm in blockProgress) {
+                            const _bn = parseInt(_bnm);
+                            const _vp = blockProgress[_bn];
+                            if (_vp > 0 && _vp < studyBlockSize) {
+                                const { start: _bms } = blockRange(_bn);
+                                const _mg = getGroupSizeForMode(getModeForPos(_bms + 1));
+                                blockProgress[_bn] = _vp * _mg;
+                            }
+                        }
                         currentScale = s.currentScale || "major";
                         currentWaveform = s.currentWaveform || "sine";
                         useCustomBg = s.useCustomBg ?? false;
@@ -1768,6 +1781,7 @@
                         sequenceStartIndex = 0;
                         currentInputLength = val.length;
                         _hintPos = val.length;
+                        _lastSkipLength = val.length;
                         // Render the display
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
@@ -1807,6 +1821,11 @@
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
+
+                    // If the value hasn't grown past the last skip-processed
+                    // length, this is a cascading event — don't re-process.
+                    if (val.length <= _lastSkipLength) { _lastSkipLength = -1; return; }
+                    _lastSkipLength = -1;
 
                     // Only do a full re-search of all of pi when the typed value can no
                     // longer be explained as a continuation/truncation of the digits we're
@@ -3375,22 +3394,32 @@
                                   }
                                  const _removeBtn = document.getElementById("piContextRemove");
                                  if (_removeBtn) {
-                                     _removeBtn.style.display = "none";
-                                    _removeBtn.onclick = (ev) => {
-                                        ev.preventDefault();
-                                        ev.stopPropagation();
-                                        if (studyBlockData[_thisBlock]) {
-                                            studyBlockData[_thisBlock].dueDate = srsDaysFromNow(1);
-                                            blockProgress[_thisBlock] = 0;
-                                            syncBlockDueDates();
-                                            saveSettings();
-                                            renderPiCoverage();
-                                            updateGoalBarOnly();
-                                        }
-                                        hidePiContextMenu();
-                                    };
-                                }
-                                menu.style.display = "block";
+                                     if (_bd) {
+                                         _removeBtn.style.display = "none";
+                                     } else {
+                                         // Frontier block: show Reset button
+                                         _removeBtn.style.display = "";
+                                         _removeBtn.textContent = "Reset";
+                                         _removeBtn.onclick = (ev) => {
+                                             ev.preventDefault();
+                                             ev.stopPropagation();
+                                             const { start, end } = blockRange(_thisBlock);
+                                             for (let _dpos = start; _dpos <= end; ) {
+                                                 delete srsData[_dpos];
+                                                 const _m = getModeForPos(_dpos + 1);
+                                                 const _g = getGroupSizeForMode(_m);
+                                                 _dpos += _g;
+                                             }
+                                             blockProgress[_thisBlock] = 0;
+                                             delete _blockRatings[_thisBlock];
+                                             saveSettings();
+                                             renderPiCoverage();
+                                             updateGoalBarOnly();
+                                          hidePiContextMenu();
+                                          };
+                                      }
+                                 }
+                                 menu.style.display = "block";
                                 const pad = 4;
                                 const mw = menu.offsetWidth || 240;
                                 const mh = menu.offsetHeight || 160;
