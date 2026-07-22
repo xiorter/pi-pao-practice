@@ -2054,19 +2054,17 @@
                                           _blockRatings[_bn] = _blockRatings[_bn] || {};
                                           _blockRatings[_bn][_completedChunkStart] = 3;
                                       }
-                                      // Count progress for every chunk completion
-                                      // (both new and existing) to fill the progress
-                                      // bar when reviewing due blocks. Also record a
-                                      // neutral rating so the pi coverage outline
-                                      // disappears (cell marked as completed today).
-                                       if (!_alreadyRated) {
-                                           blockProgress[_bn] =
-                                               (blockProgress[_bn] || 0) + _gs_z;
-                                           _blockRatings[_bn] = _blockRatings[_bn] || {};
-                                           if (_blockRatings[_bn][_completedChunkStart] === undefined) {
-                                               _blockRatings[_bn][_completedChunkStart] = 3;
-                                           }
-                                       }
+                                       // Count progress for every chunk completion
+                                       // (both new and existing) to fill the progress
+                                       // bar when reviewing due blocks. Also record a
+                                       // neutral rating so the pi coverage outline
+                                       // disappears (cell marked as completed today).
+                                        blockProgress[_bn] =
+                                            (blockProgress[_bn] || 0) + _gs_z;
+                                        _blockRatings[_bn] = _blockRatings[_bn] || {};
+                                        if (_blockRatings[_bn][_completedChunkStart] === undefined) {
+                                            _blockRatings[_bn][_completedChunkStart] = 3;
+                                        }
                                       // If the block is now fully typed,
                                       // finalise it as a study block.
                                       if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
