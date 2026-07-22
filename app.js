@@ -1313,18 +1313,6 @@
                         studyBlockData = s.studyBlockData || {};
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
-                        // Migrate old chunk-count values (stored before
-                        // blockProgress tracked digits). If a value is less
-                        // than studyBlockSize it was a chunk count.
-                        for (const _bnm in blockProgress) {
-                            const _bn = parseInt(_bnm);
-                            const _vp = blockProgress[_bn];
-                            if (_vp > 0 && _vp < studyBlockSize) {
-                                const { start: _bms } = blockRange(_bn);
-                                const _mg = getGroupSizeForMode(getModeForPos(_bms + 1));
-                                blockProgress[_bn] = _vp * _mg;
-                            }
-                        }
                         currentScale = s.currentScale || "major";
                         currentWaveform = s.currentWaveform || "sine";
                         useCustomBg = s.useCustomBg ?? false;
@@ -1824,8 +1812,7 @@
 
                     // If the value hasn't grown past the last skip-processed
                     // length, this is a cascading event — don't re-process.
-                    if (val.length <= _lastSkipLength) { _lastSkipLength = -1; return; }
-                    _lastSkipLength = -1;
+                    if (val.length <= _lastSkipLength) return;
 
                     // Only do a full re-search of all of pi when the typed value can no
                     // longer be explained as a continuation/truncation of the digits we're
