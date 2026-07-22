@@ -1771,7 +1771,7 @@
                     // the input only so the display shows them — skip all rating,
                     // crediting, and progress tracking.
                     if (skipProcessing) {
-                        sequenceStartIndex = val.length;
+                        sequenceStartIndex = 0;
                         currentInputLength = val.length;
                         _hintPos = val.length;
                         _lastSkipLength = val.length;
@@ -1815,9 +1815,15 @@
                     }
                     _hintPos = 0; // first non-skip event clears hint override
 
-                    // If the value hasn't grown past the last skip-processed
-                    // length, this is a cascading event — don't re-process.
-                    if (val.length <= _lastSkipLength) return;
+                    // Guard against the sync cascading event (same length).
+                    // Backspace and typing pass through; only the exact same
+                    // value that skipProcessing rendered is skipped.
+                    if (val.length === _lastSkipLength) {
+                        input.value = val; // strip non-digits even on guard
+                        return;
+                    }
+                    _lastSkipLength = -1; // first real event of any length
+                    // clears the guard for subsequent keystrokes
 
                     // Only do a full re-search of all of pi when the typed value can no
                     // longer be explained as a continuation/truncation of the digits we're
