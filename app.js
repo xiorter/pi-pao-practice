@@ -2073,7 +2073,7 @@
                                               start: _bS,
                                               end: _bE,
                                               dueDate: srsToday(),
-                                              interval: 0,
+                                              interval: 1,
                                               easeFactor: 2.5,
                                               reviews: 0,
                                               lapses: 0,
@@ -4373,6 +4373,7 @@
                         while (p <= end) {
                             if (srsData[p]) {
                                 srsData[p].dueDate = bd.dueDate;
+                                srsData[p].interval = bd.interval || 0;
                             }
                             const m = getModeForPos(p + 1);
                             const gs = getGroupSizeForMode(m);
@@ -4489,10 +4490,10 @@
                             );
                         }
                     } else {
-                        // ── Learning card: keep in learning state until
-                        // the block is finalized via rescheduleBlockFromSeverity.
-                        // Brand new cards (reviews===0) stay with interval=0
-                        // so they appear empty in pi coverage.
+                        // ── Learning card: stay in learning state until the
+                        // block is finalized via rescheduleBlockFromSeverity
+                        // (which calls syncBlockDueDates). interval stays 0
+                        // so the cell appears empty in pi coverage.
                         if (rating === 1) {
                             card.lapses++;
                             card.easeFactor = Math.max(
@@ -4502,30 +4503,10 @@
                             card.step = 0;
                             card.interval = 0;
                             card.dueDate = srsToday();
-                        } else if (rating === 2) {
-                            card.step = card.reviews === 0 ? 0 : -1;
-                            card.interval = card.reviews === 0 ? 0 : 1;
-                            card.dueDate = srsToday();
-                        } else if (rating === 3) {
-                            card.step = card.reviews === 0 ? 0 : -1;
-                            card.interval = card.reviews === 0 ? 0
-                                : card.interval > 0
-                                  ? Math.round(card.interval * card.easeFactor)
-                                  : 1;
-                            card.dueDate = srsDaysFromNow(card.interval || 1);
                         } else {
-                            card.step = -1;
-                            card.interval = card.reviews === 0 ? 0
-                                : card.interval > 0
-                                  ? Math.round(card.interval * card.easeFactor * 1.3)
-                                  : 4;
-                            card.easeFactor = Math.min(
-                                4.0,
-                                card.easeFactor + 0.15,
-                            );
-                            card.dueDate = srsDaysFromNow(
-                                Math.max(1, card.interval || 4),
-                            );
+                            card.step = 0;
+                            card.interval = 0;
+                            card.dueDate = srsToday();
                         }
                     }
                     // Cap: if this was a review-state card (graduated, interval > 0)
