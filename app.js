@@ -7915,19 +7915,19 @@
                     const p = document.createElement("p");
                     p.style.cssText = "font-size:0.9rem;line-height:1.5;margin:0 0 12px 0;color:var(--modal-text-muted);";
                     p.innerHTML =
-                        "Typed PAO chunks are grouped into <b>study blocks</b> of " + studyBlockSize +
-                        " chunks each. When you finish typing all chunks in a block, the block is " +
+                        "Typed PAO chunks are grouped into <b>study blocks</b>." +
+                        "When you finish typing all chunks in a block, the block is " +
                         "scheduled for future review. Due blocks appear in the <b>checklist</b> on the " +
                         "left side of the screen. Click a block entry to load its digits, type through " +
-                        "them to review, and use <b>Shift+1-4</b> to rate each chunk (1=Again, 2=Hard, " +
-                        "3=Good, 4=Easy). The block's next review date is computed from your ratings.";
+                        "them to review, and use <b>Shift+1-4</b> or hotkeys to rate each chunk." +
+                        "The block's next review date is computed from your ratings.";
                     body.appendChild(p);
 
                     const p2 = document.createElement("p");
                     p2.style.cssText = "font-size:0.9rem;line-height:1.5;margin:0 0 12px 0;color:var(--modal-text-muted);";
                     p2.innerHTML =
                         "Use <b>Add new chunks</b> in the checklist to extend your frontier. The " +
-                        "<b>Pi coverage grid</b> (Stats modal) shows every chunk colored by its block's " +
+                        "<b>Pi Coverage</b> within the stats screen shows every chunk colored by its block's " +
                         "due date. Right-click a block label to change its schedule.";
                     body.appendChild(p2);
 
@@ -7935,7 +7935,7 @@
                         "Block size",
                         `<input type="number" id="instStudyBlockSize" min="5" max="100" value="${studyBlockSize}" ` +
                         `style="width:70px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;" /> chunks`,
-                        "How many PAO chunks per block (5–100, default 25). Smaller blocks = more frequent reviews.",
+                        "How many PAO chunks per block. Smaller blocks mean more frequent reviews.",
                     );
                     body.appendChild(row);
                 }
