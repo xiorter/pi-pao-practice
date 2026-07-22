@@ -82,7 +82,6 @@
                 let currentTypingChunkPos = -1; // 0-based start of the chunk the user is in
                 let currentChunkMistakePressed = false; // true if M was pressed for this chunk
                 let currentChunkLastRating = 0; // 0=none, 1=Again, 4=Hard
-                let _skipLoadMax = 0; // tracks max pos loaded by skipProcessing
                 // Undo/Redo stacks for manual/auto mistakes added outside the SRS modal
                 let mistakeUndoStack = []; // [{ pos, oldCard }]
                 let mistakeRedoStack = []; // [{ pos, newCard }]
@@ -1776,10 +1775,6 @@
                         skipProcessing = false;
                         sequenceStartIndex = 0;
                         currentInputLength = val.length;
-                        // Track how much was pre-loaded so the auto-Good path
-                        // below skips these positions (they were already rated
-                        // when first typed in a previous session).
-                        _skipLoadMax = val.length;
                         // Render the display
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
@@ -1794,7 +1789,7 @@
                                 _sp2 += _sGs;
                             }
                             outputDiv.innerHTML = h;
-                            outputDiv.classList.toggle("mode-323", currentPAOMode === "323");
+                            outputDiv.classList.toggle("mode-323", val.length > 0 && getModeForPos(val.length) === "323");
                         }
                         const posEl = document.getElementById("position");
                         if (posEl) {
@@ -2018,17 +2013,25 @@
                                      );
                                       // Only auto-Good and count progress if
                                       // this chunk hasn't been manually rated
-                                      // (Shift+1-4) yet in this review pass, and
-                                      // wasn't pre-loaded via skipProcessing.
+                                      // (Shift+1-4) yet in this review pass,
+                                      // and the chunk is genuinely new (no
+                                      // existing graduated card) — prevents
+                                      // re-rating pre-loaded chunks.
                                       const _alreadyRated = _blockRatings[_bn] &&
                                           _blockRatings[_bn][_completedChunkStart] !== undefined;
-                                      const _wasPreLoaded = _completedChunkStart < _skipLoadMax;
-                                      if (!_alreadyRated && !_wasPreLoaded && !currentChunkMistakePressed) {
+                                      const _existingCard = srsData[_completedChunkStart];
+                                      const _isNewCard = !_existingCard ||
+                                          !(_existingCard.interval > 0 &&
+                                            (_existingCard.step === undefined || _existingCard.step < 0));
+                                      if (!_alreadyRated && _isNewCard && !currentChunkMistakePressed) {
                                           srsRate(_completedChunkStart, 3, null); // Good
                                           _blockRatings[_bn] = _blockRatings[_bn] || {};
                                           _blockRatings[_bn][_completedChunkStart] = 3;
                                       }
-                                      if (!_alreadyRated && !_wasPreLoaded) {
+                                      // Count progress for every chunk completion
+                                      // (both new and existing) to fill the progress
+                                      // bar when reviewing due blocks.
+                                      if (!_alreadyRated) {
                                           blockProgress[_bn] =
                                               (blockProgress[_bn] || 0) + 1;
                                       }
@@ -3285,7 +3288,7 @@
                                 const menu = document.getElementById("piContextMenu");
                                 if (!menu) return;
                                  const _bd = studyBlockData[_thisBlock];
-                                 const _isPartial = _bd && _bd.interval === 0;
+                                 const _isPartial = !_bd || _bd.interval === 0;
                                  const _h = menu.querySelector(".pi-context-header");
                                  if (_h) _h.textContent = `Block ${_thisBlock + 1}`;
                                  const _info = menu.querySelector(".pi-context-info");
@@ -3558,20 +3561,6 @@
                             cell.addEventListener("mouseenter", cell._hoverEnter);
                             cell.addEventListener("mouseleave", cell._hoverLeave);
                         }
-
-                        // Right-click to edit due date
-                        cell.addEventListener("contextmenu", (e) => {
-                            e.preventDefault();
-                            // Hide the hover tooltip first
-                            const popup = document.getElementById("imgPopup");
-                            const popupHeader = document.getElementById("imgPopupHeader");
-                            if (popup) popup.style.display = "none";
-                            if (popupHeader) popupHeader.style.display = "none";
-                            // Close any existing context menu
-                            hidePiContextMenu();
-                            // Show context menu
-                            showPiContextMenu(e, cellPos, card, daysUntilDue, groupNum, mode);
-                        });
 
                         // Left-click to open browse (practice) modal for this chunk
                         cell.addEventListener("click", (e) => {
@@ -3945,26 +3934,9 @@
                             const bn = item.dataset.block;
                             if (bn) {
                                 const n = parseInt(bn);
-                                // Jump to the furthest typed position
-                                // in this block (from SRS data).
-                                const { start, end } = blockRange(n);
-                                let _maxPosInBlock = start;
-                                let _pp = start;
-                                const _sChunkSize = () => {
-                                    const _m = getModeForPos(Math.min(_pp + 1, PI_DIGITS.length));
-                                    return getGroupSizeForMode(_m);
-                                };
-                                while (_pp <= end && _pp < PI_DIGITS.length) {
-                                    if (srsData[_pp]) {
-                                        _maxPosInBlock = _pp + _sChunkSize();
-                                    }
-                                    const _ss = _sChunkSize();
-                                    if (_ss <= 0) break;
-                                    _pp += _ss;
-                                }
-                                const target = snapToGroupStart(
-                                    Math.min(_maxPosInBlock, PI_DIGITS.length),
-                                );
+                                // Jump to the block's start position
+                                const { start } = blockRange(n);
+                                const target = snapToGroupStart(start);
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;

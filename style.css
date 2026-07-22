@@ -283,7 +283,6 @@ body {
     flex-direction: column;
     align-items: center;
     background-color: var(--background-color);
-    background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
     transition: background-color 0.8s;
@@ -946,7 +945,7 @@ input[type="text"]#piInput:focus {
     flex-shrink: 0;
 }
 .pi-cov-cell.pi-cov-due {
-    box-shadow: inset 0 0 0 2px white;
+    box-shadow: inset 0 0 0 1px white;
 }
 .pi-cov-cell.pi-cov-done {
     box-shadow: none;
