@@ -3934,6 +3934,7 @@
                             `<div class="checklist-text">` +
                             (typed > 0 ? `◐` : `○`) +
                             ` Block ${bn + 1} (${start + 1}-${end + 1})` +
+                            ` <span class="checklist-counter">${typed}/${blockDigits}</span>` +
                             `</div></div>`;
                     }
                     // Note about where add-new-chunks will start
@@ -3943,7 +3944,8 @@
                     const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
                     html += `<div class="checklist-entry" data-action="add">` +
                         `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
-                        `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})</div></div>`;
+                        `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})` +
+                        ` <span class="checklist-counter">${_frTyped}/${_frDigits}</span></div></div>`;
                     el.innerHTML = html;
                     // Wire clicks
                     el.querySelectorAll(".checklist-entry").forEach((item) => {
@@ -3956,10 +3958,7 @@
                                 const _typedHere = blockProgress[n] || 0;
                                 let target = snapToGroupStart(start);
                                 if (_typedHere > 0) {
-                                    const _gs = getGroupSizeForMode(
-                                        getModeForPos(Math.max(1, start + _typedHere)),
-                                    );
-                                    target = snapToGroupStart(start + _typedHere) + _gs;
+                                    target = snapToGroupStart(start + _typedHere);
                                 }
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
@@ -7178,6 +7177,7 @@
                     "paoSource",
                     "paoRanges",
                     "ankiImages",
+                    "studyBlocks",
                     "cloudSync",
                 ];
 
@@ -7253,6 +7253,8 @@
                         renderInstallerPaoRanges(body);
                     else if (step === "ankiImages")
                         renderInstallerAnkiImages(body);
+                    else if (step === "studyBlocks")
+                        renderInstallerStudyBlocks(body);
                     else if (step === "cloudSync")
                         renderInstallerCloudSync(body);
 
@@ -7310,6 +7312,7 @@
                     paoSource: "PAO Source",
                     paoRanges: "PAO Range",
                     ankiImages: "Anki Images",
+                    studyBlocks: "Study Blocks",
                     cloudSync: "Cloud Sync",
                 };
 
@@ -7879,8 +7882,52 @@
                         }
                     }, 0);
                 }
+                function _saveInstallerStudyBlocks() {
+                    const inp = document.getElementById("instStudyBlockSize");
+                    if (inp) {
+                        const v = parseInt(inp.value);
+                        if (!isNaN(v) && v >= 5 && v <= 100) {
+                            studyBlockSize = v;
+                            studyBlockData = {};
+                            blockProgress = {};
+                            _blockRatings = {};
+                            migrateStudyBlocks();
+                            saveSettings();
+                        }
+                    }
+                }
 
-                // Step 5: Cloud sync (optional) — mirrors Settings → Cloud Sync.
+                // Step 5: Study blocks — how review scheduling works.
+                function renderInstallerStudyBlocks(body) {
+                    const p = document.createElement("p");
+                    p.style.cssText = "font-size:0.9rem;line-height:1.5;margin:0 0 12px 0;color:var(--modal-text-muted);";
+                    p.innerHTML =
+                        "Typed PAO chunks are grouped into <b>study blocks</b> of " + studyBlockSize +
+                        " chunks each. When you finish typing all chunks in a block, the block is " +
+                        "scheduled for future review. Due blocks appear in the <b>checklist</b> on the " +
+                        "left side of the screen. Click a block entry to load its digits, type through " +
+                        "them to review, and use <b>Shift+1-4</b> to rate each chunk (1=Again, 2=Hard, " +
+                        "3=Good, 4=Easy). The block's next review date is computed from your ratings.";
+                    body.appendChild(p);
+
+                    const p2 = document.createElement("p");
+                    p2.style.cssText = "font-size:0.9rem;line-height:1.5;margin:0 0 12px 0;color:var(--modal-text-muted);";
+                    p2.innerHTML =
+                        "Use <b>Add new chunks</b> in the checklist to extend your frontier. The " +
+                        "<b>Pi coverage grid</b> (Stats modal) shows every chunk colored by its block's " +
+                        "due date. Right-click a block label to change its schedule.";
+                    body.appendChild(p2);
+
+                    const row = _installerRow(
+                        "Block size",
+                        `<input type="number" id="instStudyBlockSize" min="5" max="100" value="${studyBlockSize}" ` +
+                        `style="width:70px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;" /> chunks`,
+                        "How many PAO chunks per block (5–100, default 25). Smaller blocks = more frequent reviews.",
+                    );
+                    body.appendChild(row);
+                }
+
+                // Step 6: Cloud sync (optional) — mirrors Settings → Cloud Sync.
                 function renderInstallerCloudSync(body) {
                     body.appendChild(
                         _installerP(
@@ -7968,6 +8015,8 @@
                             _saveInstallerPaoSource();
                         else if (step === "paoRanges")
                             _saveInstallerPaoRanges();
+                        else if (step === "studyBlocks")
+                            _saveInstallerStudyBlocks();
                         else if (step === "cloudSync")
                             _saveInstallerCloudSync();
                         // paoRanges/ankiImages save nothing extra here
