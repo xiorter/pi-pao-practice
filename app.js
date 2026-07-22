@@ -82,6 +82,7 @@
                 let currentTypingChunkPos = -1; // 0-based start of the chunk the user is in
                 let currentChunkMistakePressed = false; // true if M was pressed for this chunk
                 let currentChunkLastRating = 0; // 0=none, 1=Again, 4=Hard
+                let _hintPos = 0; // hint position after skipProcessing load
                 // Undo/Redo stacks for manual/auto mistakes added outside the SRS modal
                 let mistakeUndoStack = []; // [{ pos, oldCard }]
                 let mistakeRedoStack = []; // [{ pos, newCard }]
@@ -1775,6 +1776,7 @@
                         skipProcessing = false;
                         sequenceStartIndex = 0;
                         currentInputLength = 0;
+                        _hintPos = val.length;
                         // Render the display
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
@@ -1800,6 +1802,7 @@
                         if (outputContainer) outputContainer.scrollTop = outputContainer.scrollHeight;
                         return;
                     }
+                    _hintPos = 0; // first non-skip event clears hint override
 
                     // Only do a full re-search of all of pi when the typed value can no
                     // longer be explained as a continuation/truncation of the digits we're
@@ -2035,35 +2038,36 @@
                                       // bar when reviewing due blocks. Also record a
                                       // neutral rating so the pi coverage outline
                                       // disappears (cell marked as completed today).
-                                      if (!_alreadyRated) {
-                                          blockProgress[_bn] =
-                                              (blockProgress[_bn] || 0) + 1;
-                                          _blockRatings[_bn] = _blockRatings[_bn] || {};
-                                          if (_blockRatings[_bn][_completedChunkStart] === undefined) {
-                                              _blockRatings[_bn][_completedChunkStart] = 3;
+                                       if (!_alreadyRated) {
+                                           blockProgress[_bn] =
+                                               (blockProgress[_bn] || 0) + _gs_z;
+                                           _blockRatings[_bn] = _blockRatings[_bn] || {};
+                                           if (_blockRatings[_bn][_completedChunkStart] === undefined) {
+                                               _blockRatings[_bn][_completedChunkStart] = 3;
+                                           }
+                                       }
+                                      // If the block is now fully typed,
+                                      // finalise it as a study block.
+                                      if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
+                                          const { start: _bS, end: _bE } = blockRange(_bn);
+                                          studyBlockData[_bn] = {
+                                              start: _bS,
+                                              end: _bE,
+                                              dueDate: srsToday(),
+                                              interval: 0,
+                                              easeFactor: 2.5,
+                                              reviews: 0,
+                                              lapses: 0,
+                                          };
+                                          syncBlockDueDates();
+                                          saveSettings();
+                                      }
+                                      if (studyBlockData[_bn]) {
+                                          const { start: _bS, end: _bE } = blockRange(_bn);
+                                          if (blockProgress[_bn] >= _bE - _bS + 1) {
+                                              rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
                                           }
                                       }
-                                     // If the block is now fully typed,
-                                     // finalise it as a study block.
-                                     if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
-                                         const { start: _bS, end: _bE } = blockRange(_bn);
-                                         studyBlockData[_bn] = {
-                                             start: _bS,
-                                             end: _bE,
-                                             dueDate: srsToday(),
-                                             interval: 0,
-                                             easeFactor: 2.5,
-                                             reviews: 0,
-                                             lapses: 0,
-                                         };
-                                         syncBlockDueDates();
-                                         saveSettings();
-                                     }
-                                     if (studyBlockData[_bn]) {
-                                         if (blockProgress[_bn] >= studyBlockSize) {
-                                             rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
-                                         }
-                                     }
                                     srsUpdateBadge();
                                 }
                                 posTypedDates[_completedChunkStart] = srsToday();
@@ -2154,7 +2158,7 @@
                 }
 
                 function showHintLogic() {
-                    const pos = sequenceStartIndex + currentInputLength;
+                    const pos = _hintPos > 0 ? _hintPos : (sequenceStartIndex + currentInputLength);
                     const gSize = getGroupSize();
                     const startOfGroup = Math.floor(pos / gSize) * gSize;
                     const info = getPAOGroupDataByPos(startOfGroup);
@@ -3917,8 +3921,9 @@
                     for (const bn of due) {
                         const { start, end } = blockRange(bn);
                         const typed = blockProgress[bn] || 0;
+                        const blockDigits = end - start + 1;
                         const pct = Math.min(100, Math.round(
-                            (typed / studyBlockSize) * 100,
+                            (typed / blockDigits) * 100,
                         ));
                         html +=
                             `<div class="checklist-entry" data-block="${bn}">` +
@@ -3931,7 +3936,8 @@
                     // Note about where add-new-chunks will start
                     const { start: _frS, end: _frE } = blockRange(frontier);
                     const _frTyped = blockProgress[frontier] || 0;
-                    const _frPct = Math.min(100, Math.round((_frTyped / studyBlockSize) * 100));
+                    const _frDigits = _frE - _frS + 1;
+                    const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
                     html += `<div class="checklist-entry" data-action="add">` +
                         `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
                         `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})</div></div>`;
@@ -3942,9 +3948,16 @@
                             const bn = item.dataset.block;
                             if (bn) {
                                 const n = parseInt(bn);
-                                // Jump to the block's start position
-                                const { start } = blockRange(n);
-                                const target = snapToGroupStart(start);
+                                // Jump to block start + today's progress
+                                const { start, end } = blockRange(n);
+                                const _typedHere = blockProgress[n] || 0;
+                                let target = snapToGroupStart(start);
+                                if (_typedHere > 0) {
+                                    const _gs = getGroupSizeForMode(
+                                        getModeForPos(Math.max(1, start + _typedHere)),
+                                    );
+                                    target = snapToGroupStart(start + _typedHere) + _gs;
+                                }
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;
@@ -4214,9 +4227,9 @@
                 }
 
                 function blockForPos(pos) {
-                    const gNum = posToGroupNum(pos); // 1-indexed group number
-                    if (gNum <= 0) return 0;
-                    return Math.floor((gNum - 1) / studyBlockSize);
+                    const gNum = posToGroupNum(pos); // 0-indexed group number
+                    if (gNum < 0) return 0;
+                    return Math.floor(gNum / studyBlockSize);
                 }
 
                 function blockRange(blockNum) {
