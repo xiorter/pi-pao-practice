@@ -283,6 +283,7 @@ body {
     flex-direction: column;
     align-items: center;
     background-color: var(--background-color);
+    background-size: 100% 100%;
     background-position: center;
     background-repeat: no-repeat;
     transition: background-color 0.8s;
@@ -911,7 +912,7 @@ input[type="text"]#piInput:focus {
     text-align: center;
 }
 .stats-heatmap-nav-btn {
-    background: var(--stats-nav-bg);
+    background: #232329;
     border: 1px solid var(--stats-nav-border);
     color: var(--stats-nav-color);
     width: 28px;
@@ -1756,7 +1757,7 @@ input[type="number"] {
     position: relative;
     overflow: hidden;
     transition: opacity 0.12s;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.6);
 }
 #blockChecklist .checklist-entry:last-child {
     border-bottom: none;

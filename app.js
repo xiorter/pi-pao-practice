@@ -1774,7 +1774,7 @@
                     if (skipProcessing) {
                         skipProcessing = false;
                         sequenceStartIndex = 0;
-                        currentInputLength = val.length;
+                        currentInputLength = 0;
                         // Render the display
                         const outputDiv = document.getElementById("output");
                         const outputContainer = document.getElementById("output-container");
@@ -1793,7 +1793,9 @@
                         }
                         const posEl = document.getElementById("position");
                         if (posEl) {
-                            posEl.innerHTML = val.length > 0 ? `#1 → #${val.length} (${val.length})` : "";
+                            posEl.innerHTML = val.length > 0
+                                ? `#1 &thinsp;→&thinsp; #${val.length} &thinsp;<span style="opacity:0.7;font-size:0.85em;">(${val.length})</span>`
+                                : "";
                         }
                         if (outputContainer) outputContainer.scrollTop = outputContainer.scrollHeight;
                         return;
@@ -2030,10 +2032,16 @@
                                       }
                                       // Count progress for every chunk completion
                                       // (both new and existing) to fill the progress
-                                      // bar when reviewing due blocks.
+                                      // bar when reviewing due blocks. Also record a
+                                      // neutral rating so the pi coverage outline
+                                      // disappears (cell marked as completed today).
                                       if (!_alreadyRated) {
                                           blockProgress[_bn] =
                                               (blockProgress[_bn] || 0) + 1;
+                                          _blockRatings[_bn] = _blockRatings[_bn] || {};
+                                          if (_blockRatings[_bn][_completedChunkStart] === undefined) {
+                                              _blockRatings[_bn][_completedChunkStart] = 3;
+                                          }
                                       }
                                      // If the block is now fully typed,
                                      // finalise it as a study block.
@@ -3398,7 +3406,7 @@
 
                         // Get PAO data for tooltip (works for all positions)
                         const d = getPAOGroupDataByPos(p, mode);
-                        const groupNum = Math.floor(p / gs) + 1;
+                        const groupNum = posToGroupNum(p) + 1;
 
                         // Card states:
                         //   - no card            → not added to deck (never typed/marked)
