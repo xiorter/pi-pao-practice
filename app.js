@@ -1276,8 +1276,6 @@
                         };
                         _sv("srsNewPerDay", s.srsNewPerDay);
                         _sv("srsMaxReviews", s.srsMaxReviews);
-                        _sv("srsLearningSteps", s.srsLearningSteps);
-                        _sv("srsRelrnSteps", s.srsRelrnSteps);
                         _sv("srsInsertionOrder", s.srsInsertionOrder);
                         _sv("srsNewReviewOrder", s.srsNewReviewOrder);
                         _sv("srsReviewSortOrder", s.srsReviewSortOrder);
@@ -1664,12 +1662,6 @@
                             parseInt(
                                 document.getElementById("srsMaxReviews")?.value,
                             ) || 200,
-                        srsLearningSteps:
-                            document.getElementById("srsLearningSteps")
-                                ?.value || "1 10",
-                        srsRelrnSteps:
-                            document.getElementById("srsRelrnSteps")?.value ||
-                            "10",
                         srsInsertionOrder:
                             document.getElementById("srsInsertionOrder")
                                 ?.value || "sequential",
@@ -1775,7 +1767,7 @@
                     if (skipProcessing) {
                         skipProcessing = false;
                         sequenceStartIndex = 0;
-                        currentInputLength = 0;
+                        currentInputLength = val.length;
                         _hintPos = val.length;
                         // Render the display
                         const outputDiv = document.getElementById("output");
@@ -1800,6 +1792,18 @@
                                 : "";
                         }
                         if (outputContainer) outputContainer.scrollTop = outputContainer.scrollHeight;
+                        // Toast showing PAO for the last completed chunk
+                        if (val.length > 0) {
+                            let _tPos = Math.max(0, snapToGroupStart(val.length - 1));
+                            const _tGs = getGroupSizeForMode(getModeForPos(_tPos + 1));
+                            if (_tPos + _tGs > val.length) {
+                                _tPos = _tPos >= _tGs ? _tPos - _tGs : 0;
+                            }
+                            const _tInfo = getPAOGroupDataByPos(_tPos, getModeForPos(_tPos + 1));
+                            if (_tInfo) {
+                                showToast(`${_tInfo.pTerm} / ${_tInfo.aTerm} / ${_tInfo.oTerm}`);
+                            }
+                        }
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
@@ -3367,10 +3371,9 @@
                                          hidePiContextMenu();
                                      };
                                  }
-                                const _removeBtn = document.getElementById("piContextRemove");
-                                if (_removeBtn) {
-                                    _removeBtn.textContent = "Done";
-                                    _removeBtn.style.display = "";
+                                 const _removeBtn = document.getElementById("piContextRemove");
+                                 if (_removeBtn) {
+                                     _removeBtn.style.display = "none";
                                     _removeBtn.onclick = (ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
@@ -3398,7 +3401,6 @@
                             });
                             container.appendChild(_labelCell);
                         }
-                        cellsInRow++;
                         const cellPos = p; // capture current position for closures
                         const mode = getModeForPos(p + 1);
                         const gs = getGroupSizeForMode(mode);
@@ -3587,6 +3589,7 @@
                         });
 
                         container.appendChild(cell);
+                        cellsInRow++;
                         p += gs;
                     }
                     // Pad the last block's incomplete row
@@ -4378,32 +4381,12 @@
                             lapses: 0,
                             step: 0,
                         };
-                    const cfg = srsGetSettings();
-                    const lSteps =
-                        cfg.learningSteps.length > 0
-                            ? cfg.learningSteps
-                            : [1, 10]; // minutes
-                    const rSteps =
-                        cfg.relrnSteps.length > 0 ? cfg.relrnSteps : [10];
-                    const isLearning =
-                        card.step !== undefined &&
-                        card.step >= 0 &&
-                        card.interval <= 0;
-                    const isRelearning =
-                        card.lapses > 0 &&
-                        card.step !== undefined &&
-                        card.step >= 0;
                     const inReviewState =
                         card.interval > 0 &&
                         (card.step === undefined || card.step < 0);
                     // Save the original due date so we can cap the new one
                     // (Anki "review ahead" behavior: never push a not-due card further out)
                     const originalDueDate = card.dueDate;
-                    const steps = inReviewState
-                        ? []
-                        : isRelearning
-                          ? rSteps
-                          : lSteps;
 
                     // Decide whether this rating counts as a "review" in the
                     // stats heatmap. Auto-detect (null) → only if the card was
@@ -4474,35 +4457,45 @@
                             );
                         }
                     } else {
-                        // ── Learning / Relearning steps ──
-                        const curStep = card.step || 0;
+                        // ── Learning card: graduate immediately ──
+                        // Learning steps are vestigial (block system
+                        // handles scheduling). Rate directly to review.
                         if (rating === 1) {
-                            // Again — reset to step 0
-                            card.step = 0;
-                            card.dueDate = srsToday(); // immediately back in queue
-                        } else if (rating === 4) {
-                            // Easy — graduate immediately
-                            card.step = -1;
-                            card.interval = isRelearning ? 1 : 4;
-                            card.dueDate = srsDaysFromNow(card.interval);
-                        } else if (rating === 3 || rating === 2) {
-                            // Good (or Hard = same step for simplicity)
-                            const nextStep = curStep + 1;
-                            if (nextStep >= steps.length) {
-                                // Graduate to review
-                                card.step = -1;
-                                card.interval = isRelearning
-                                    ? 1
-                                    : card.interval > 0
-                                      ? Math.round(
-                                            card.interval * card.easeFactor,
-                                        )
-                                      : 1;
-                                card.dueDate = srsDaysFromNow(card.interval);
-                            } else {
-                                card.step = nextStep;
-                                card.dueDate = srsToday(); // stays in today's queue
+                            card.lapses++;
+                            card.easeFactor = Math.max(
+                                1.3,
+                                card.easeFactor - 0.2,
+                            );
+                            if (card.interval > 1) {
+                                card.interval = Math.max(
+                                    1,
+                                    Math.round(card.interval * 0.5),
+                                );
                             }
+                            card.step = -1;
+                            card.dueDate = srsToday();
+                        } else if (rating === 2) {
+                            card.step = -1;
+                            card.interval = 1;
+                            card.dueDate = srsToday();
+                        } else if (rating === 3) {
+                            card.step = -1;
+                            card.interval = card.interval > 0
+                                ? Math.round(card.interval * card.easeFactor)
+                                : 1;
+                            card.dueDate = srsDaysFromNow(card.interval);
+                        } else {
+                            card.step = -1;
+                            card.interval = card.interval > 0
+                                ? Math.round(card.interval * card.easeFactor * 1.3)
+                                : 4;
+                            card.easeFactor = Math.min(
+                                4.0,
+                                card.easeFactor + 0.15,
+                            );
+                            card.dueDate = srsDaysFromNow(
+                                Math.max(1, card.interval),
+                            );
                         }
                     }
                     // Cap: if this was a review-state card (graduated, interval > 0)
@@ -4532,13 +4525,6 @@
                         reviews: 0,
                         step: 0,
                     };
-                    const cfg = srsGetSettings();
-                    const lSteps =
-                        cfg.learningSteps.length > 0
-                            ? cfg.learningSteps
-                            : [1, 10];
-                    const rSteps =
-                        cfg.relrnSteps.length > 0 ? cfg.relrnSteps : [10];
                     const isReview =
                         card.interval > 0 &&
                         (card.step === undefined || card.step < 0);
@@ -4565,15 +4551,10 @@
                             ) + "d"
                         );
                     }
-                    // Learning/relearning
-                    const steps = card.lapses > 0 ? rSteps : lSteps;
-                    const curStep = card.step || 0;
-                    if (rating === 1) return (steps[0] || 1) + "m";
-                    if (rating === 4) return card.lapses > 0 ? "1d" : "4d";
-                    const nextStep = curStep + 1;
-                    if (nextStep >= steps.length)
-                        return card.lapses > 0 ? "1d" : "1d";
-                    return (steps[nextStep] || 10) + "m";
+                    // Learning card — graduate immediately
+                    if (rating === 1) return "learn";
+                    if (rating === 4) return "4d";
+                    return "1d";
                 }
 
                 // ═══════════════════════════════════════════
@@ -4592,22 +4573,6 @@
                             parseInt(
                                 document.getElementById("srsMaxReviews")?.value,
                             ) || 200,
-                        learningSteps: (
-                            document.getElementById("srsLearningSteps")
-                                ?.value || "1 10"
-                        )
-                            .trim()
-                            .split(/\s+/)
-                            .map(Number)
-                            .filter(Boolean),
-                        relrnSteps: (
-                            document.getElementById("srsRelrnSteps")?.value ||
-                            "10"
-                        )
-                            .trim()
-                            .split(/\s+/)
-                            .map(Number)
-                            .filter(Boolean),
                         insertionOrder:
                             document.getElementById("srsInsertionOrder")
                                 ?.value || "sequential",
