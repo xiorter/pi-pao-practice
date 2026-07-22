@@ -3256,7 +3256,7 @@
                                     );
                                     label += ` -${over}d`;
                                 } else if (_bd.dueDate === _today) {
-                                    label += " 0d";
+                                    label += " Today";
                                 } else {
                                     const days =
                                         Math.round(
@@ -3314,7 +3314,7 @@
                                          const _todayMs = new Date(srsToday() + "T00:00:00");
                                          const _diff = Math.round((_dueMs - _todayMs) / 86400000);
                                          if (_diff < 0) { _info.textContent = `Overdue ${Math.abs(_diff)} day${Math.abs(_diff) !== 1 ? "s" : ""}`; }
-                                         else if (_diff === 0) { _info.textContent = "Due today"; }
+                                         else if (_diff === 0) { _info.textContent = "Today"; }
                                          else { _info.textContent = `Due in ${_diff} day${_diff !== 1 ? "s" : ""}`; }
                                      } else {
                                          _info.textContent = "Not scheduled";
@@ -3337,40 +3337,42 @@
                                  if (_apply) {
                                      if (_isPartial) { _apply.style.display = "none"; }
                                      else { _apply.style.display = ""; }
-                                     _apply.onclick = (ev) => {
-                                         ev.preventDefault();
-                                         ev.stopPropagation();
-                                         const _d = Math.max(0, parseInt(document.getElementById("piContextDays").value) || 1);
-                                         if (studyBlockData[_thisBlock]) {
-                                             studyBlockData[_thisBlock].dueDate = srsDaysFromNow(_d);
-                                             blockProgress[_thisBlock] = 0;
-                                             syncBlockDueDates();
-                                             saveSettings();
-                                             renderPiCoverage();
-                                             updateGoalBarOnly();
-                                         }
-                                         hidePiContextMenu();
-                                     };
-                                 }
-                                 const _todayBtn = document.getElementById("piContextToday");
-                                 if (_todayBtn) {
-                                     if (_isPartial) { _todayBtn.style.display = "none"; }
-                                     else { _todayBtn.style.display = ""; }
-                                     _todayBtn.textContent = "Due Today";
-                                     _todayBtn.onclick = (ev) => {
-                                         ev.preventDefault();
-                                         ev.stopPropagation();
-                                         if (studyBlockData[_thisBlock]) {
-                                             studyBlockData[_thisBlock].dueDate = srsToday();
-                                             blockProgress[_thisBlock] = 0;
-                                             syncBlockDueDates();
-                                             saveSettings();
-                                             renderPiCoverage();
-                                             updateGoalBarOnly();
-                                         }
-                                         hidePiContextMenu();
-                                     };
-                                 }
+                                      _apply.onclick = (ev) => {
+                                          ev.preventDefault();
+                                          ev.stopPropagation();
+                                          const _d = parseInt(document.getElementById("piContextDays").value) || 0;
+                                          if (studyBlockData[_thisBlock]) {
+                                              studyBlockData[_thisBlock].dueDate = _d <= 0 ? srsToday() : srsDaysFromNow(_d);
+                                              blockProgress[_thisBlock] = 0;
+                                              delete _blockRatings[_thisBlock];
+                                              syncBlockDueDates();
+                                              saveSettings();
+                                              renderPiCoverage();
+                                              updateGoalBarOnly();
+                                          }
+                                          hidePiContextMenu();
+                                      };
+                                  }
+                                  const _todayBtn = document.getElementById("piContextToday");
+                                  if (_todayBtn) {
+                                      if (_isPartial) { _todayBtn.style.display = "none"; }
+                                      else { _todayBtn.style.display = ""; }
+                                      _todayBtn.textContent = "Due Today";
+                                      _todayBtn.onclick = (ev) => {
+                                          ev.preventDefault();
+                                          ev.stopPropagation();
+                                          if (studyBlockData[_thisBlock]) {
+                                              studyBlockData[_thisBlock].dueDate = srsToday();
+                                              blockProgress[_thisBlock] = 0;
+                                              delete _blockRatings[_thisBlock];
+                                              syncBlockDueDates();
+                                              saveSettings();
+                                              renderPiCoverage();
+                                              updateGoalBarOnly();
+                                          }
+                                          hidePiContextMenu();
+                                      };
+                                  }
                                  const _removeBtn = document.getElementById("piContextRemove");
                                  if (_removeBtn) {
                                      _removeBtn.style.display = "none";
@@ -3932,8 +3934,10 @@
                             `<div class="checklist-entry" data-block="${bn}">` +
                             `<div class="checklist-progress" style="width:${pct}%;"></div>` +
                             `<div class="checklist-text">` +
+                            `<span class="checklist-label">` +
                             (typed > 0 ? `◐` : `○`) +
                             ` Block ${bn + 1} (${start + 1}-${end + 1})` +
+                            `</span>` +
                             ` <span class="checklist-counter">${typed}/${blockDigits}</span>` +
                             `</div></div>`;
                     }
@@ -3944,7 +3948,7 @@
                     const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
                     html += `<div class="checklist-entry" data-action="add">` +
                         `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
-                        `<div class="checklist-text">+ Add new chunks (${_frS + 1}-${_frE + 1})` +
+                        `<div class="checklist-text"><span class="checklist-label">+ Add new chunks (${_frS + 1}-${_frE + 1})</span>` +
                         ` <span class="checklist-counter">${_frTyped}/${_frDigits}</span></div></div>`;
                     el.innerHTML = html;
                     // Wire clicks
@@ -4456,44 +4460,42 @@
                             );
                         }
                     } else {
-                        // ── Learning card: graduate immediately ──
-                        // Learning steps are vestigial (block system
-                        // handles scheduling). Rate directly to review.
+                        // ── Learning card: keep in learning state until
+                        // the block is finalized via rescheduleBlockFromSeverity.
+                        // Brand new cards (reviews===0) stay with interval=0
+                        // so they appear empty in pi coverage.
                         if (rating === 1) {
                             card.lapses++;
                             card.easeFactor = Math.max(
                                 1.3,
                                 card.easeFactor - 0.2,
                             );
-                            if (card.interval > 1) {
-                                card.interval = Math.max(
-                                    1,
-                                    Math.round(card.interval * 0.5),
-                                );
-                            }
-                            card.step = -1;
+                            card.step = 0;
+                            card.interval = 0;
                             card.dueDate = srsToday();
                         } else if (rating === 2) {
-                            card.step = -1;
-                            card.interval = 1;
+                            card.step = card.reviews === 0 ? 0 : -1;
+                            card.interval = card.reviews === 0 ? 0 : 1;
                             card.dueDate = srsToday();
                         } else if (rating === 3) {
-                            card.step = -1;
-                            card.interval = card.interval > 0
-                                ? Math.round(card.interval * card.easeFactor)
-                                : 1;
-                            card.dueDate = srsDaysFromNow(card.interval);
+                            card.step = card.reviews === 0 ? 0 : -1;
+                            card.interval = card.reviews === 0 ? 0
+                                : card.interval > 0
+                                  ? Math.round(card.interval * card.easeFactor)
+                                  : 1;
+                            card.dueDate = srsDaysFromNow(card.interval || 1);
                         } else {
                             card.step = -1;
-                            card.interval = card.interval > 0
-                                ? Math.round(card.interval * card.easeFactor * 1.3)
-                                : 4;
+                            card.interval = card.reviews === 0 ? 0
+                                : card.interval > 0
+                                  ? Math.round(card.interval * card.easeFactor * 1.3)
+                                  : 4;
                             card.easeFactor = Math.min(
                                 4.0,
                                 card.easeFactor + 0.15,
                             );
                             card.dueDate = srsDaysFromNow(
-                                Math.max(1, card.interval),
+                                Math.max(1, card.interval || 4),
                             );
                         }
                     }
@@ -7958,7 +7960,7 @@
                     ta.placeholder =
                         '{"apiKey":"...","authDomain":"...","projectId":"...",...}';
                     ta.style.cssText =
-                        "width:100%;min-height:90px;font-family:monospace;font-size:0.8rem;padding:6px;background:var(--modal-input-bg);color:var(--modal-text-color);border:1px solid #ccc;border-radius:4px;box-sizing:border-box;resize:vertical;";
+                        "width:100%;min-height:90px;font-family:monospace;font-size:0.8rem;padding:6px;background:#fff;color:#333;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;resize:vertical;";
                     const existing = document.getElementById("firebaseConfigInput");
                     if (existing && existing.value) {
                         ta.value = existing.value;

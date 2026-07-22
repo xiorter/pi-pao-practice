@@ -1779,11 +1779,18 @@ input[type="number"] {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    white-space: nowrap;
     gap: 4px;
+    min-width: 0;
+}
+#blockChecklist .checklist-text .checklist-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 #blockChecklist .checklist-counter {
     font-size: 0.7rem;
     opacity: 0.7;
     flex-shrink: 0;
+    white-space: nowrap;
 }
