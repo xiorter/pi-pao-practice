@@ -1776,9 +1776,14 @@ input[type="number"] {
 #blockChecklist .checklist-text {
     position: relative;
     z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    white-space: nowrap;
+    gap: 4px;
 }
 #blockChecklist .checklist-counter {
-    float: right;
     font-size: 0.7rem;
     opacity: 0.7;
+    flex-shrink: 0;
 }

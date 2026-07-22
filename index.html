@@ -2058,6 +2058,48 @@
                      </div>
                  </div>
              </div>
+          </div>
+
+         <!-- Anki setup guide modal -->
+         <div id="ankiGuideModal" class="modal" style="display:none">
+             <div class="modal-content" style="max-width:640px;max-height:80vh;overflow-y:auto;padding:20px 24px;">
+                 <span class="close" id="ankiGuideClose">&times;</span>
+                 <h2 style="margin:0 0 12px 0;">Setting up Anki for Pi PAO Practice</h2>
+
+                 <h3>Which system should I build for?</h3>
+                 <table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:0.85rem;">
+                     <tr><th></th><th style="text-align:left;padding:4px 8px;border:1px solid var(--modal-border)">Century (2-2-2)</th><th style="text-align:left;padding:4px 8px;border:1px solid var(--modal-border)">Millennium (3-2-3)</th></tr>
+                     <tr><td style="padding:4px 8px;border:1px solid var(--modal-border)">Deck size</td><td style="padding:4px 8px;border:1px solid var(--modal-border)">~300</td><td style="padding:4px 8px;border:1px solid var(--modal-border)">~2100</td></tr>
+                     <tr><td style="padding:4px 8px;border:1px solid var(--modal-border)">Digits per chunk</td><td style="padding:4px 8px;border:1px solid var(--modal-border)">6</td><td style="padding:4px 8px;border:1px solid var(--modal-border)">8</td></tr>
+                     <tr><td style="padding:4px 8px;border:1px solid var(--modal-border)">Effort to set up</td><td style="padding:4px 8px;border:1px solid var(--modal-border)">Low</td><td style="padding:4px 8px;border:1px solid var(--modal-border)">High</td></tr>
+                 </table>
+                 <p style="font-size:0.85rem;color:var(--modal-text-muted);margin:4px 0 14px;"><strong>Recommendation:</strong> start with Century. You can add Millennium later — the app supports both simultaneously.</p>
+
+                 <h3>Step 1 — Create a note type in Anki</h3>
+                 <p style="font-size:0.85rem;margin:4px 0 10px;">Open Anki. <strong>Tools → Manage Note Types → Add</strong>. Choose &quot;Add: Basic&quot; and name it <code>PAO</code>. Click <strong>Fields</strong> and set up: <code>Number</code>, <code>Person</code>, <code>Action</code>, <code>Object</code>, <code>PersonImg</code>, <code>ObjectImg</code>.</p>
+
+                 <h3>Step 2 — Set up card templates</h3>
+                 <p style="font-size:0.85rem;margin:4px 0 6px;">In the note type editor, click <strong>Cards</strong>. Create three card types:</p>
+                 <ul style="font-size:0.85rem;margin:4px 0 10px;">
+                     <li><strong>Card 1:</strong> Front: <code>{{PersonImg}}</code> → Back: <code>{{Person}}&lt;br&gt;{{FrontSide}}&lt;hr&gt;{{Number}}</code></li>
+                     <li><strong>Card 2:</strong> Front: <code>{{ObjectImg}}</code> → Back: <code>{{Object}}&lt;br&gt;{{FrontSide}}&lt;hr&gt;{{Number}}</code></li>
+                     <li><strong>Card 3:</strong> Front: <code>{{Action}}</code> → Back: <code>{{FrontSide}}&lt;hr&gt;{{Number}}</code></li>
+                 </ul>
+
+                 <h3>Step 3 — Import your PAO list into Anki</h3>
+                 <p style="font-size:0.85rem;margin:4px 0 10px;">Open <code>sample-pao-system.xlsx</code> and go to the <strong>Century Import</strong> or <strong>Millennium Import</strong> sheet. <strong>File → Save a Copy → CSV UTF-8 (.csv)</strong>. In Anki: <strong>File → Import</strong>, set Note Type to <code>PAO</code>, map columns: 1 → Number, 2 → Person, 3 → Action, 4 → Object.</p>
+
+                 <h3>Step 4 — Add images to your cards</h3>
+                 <p style="font-size:0.85rem;margin:4px 0 10px;">In the Anki <strong>Card Browser</strong>, click into the <code>PersonImg</code> or <code>ObjectImg</code> field and paste an image or use the editor toolbar to upload.</p>
+
+                 <h3>Step 5 — Export the .txt file</h3>
+                 <p style="font-size:0.85rem;margin:4px 0 10px;">In Anki: <strong>File → Export</strong>. Choose &quot;Notes in Plain Text (.txt)&quot;, select your deck, <strong>uncheck &quot;Include tags&quot;</strong>. The output has columns: <code>Number, Person, Action, Object, PersonImg, ObjectImg</code>. Load this file in the app under <strong>Settings → Anki Images</strong>.</p>
+
+                 <h3>Step 6 — Load media into the app</h3>
+                 <p style="font-size:0.85rem;margin:4px 0 10px;">Chrome/Edge: use the folder picker to point to your Anki <code>collection.media</code>. Other browsers: zip the folder and upload the .zip. Images are stored locally in IndexedDB and persist across reloads.</p>
+
+                 <p style="text-align:right;margin:16px 0 0;"><button type="button" class="settings-btn" id="ankiGuideCloseBtn">Close</button></p>
+             </div>
          </div>
 
          <script src="app.js"></script>

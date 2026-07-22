@@ -1765,7 +1765,6 @@
                     // the input only so the display shows them — skip all rating,
                     // crediting, and progress tracking.
                     if (skipProcessing) {
-                        skipProcessing = false;
                         sequenceStartIndex = 0;
                         currentInputLength = val.length;
                         _hintPos = val.length;
@@ -1804,6 +1803,7 @@
                                 showToast(`${_tInfo.pTerm} / ${_tInfo.aTerm} / ${_tInfo.oTerm}`);
                             }
                         }
+                        setTimeout(() => { skipProcessing = false; }, 0);
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
@@ -7476,6 +7476,7 @@
                             <label for="instExcelUpload" class="settings-btn" style="cursor:pointer">Choose file</label>
                             <input type="file" id="instExcelUpload" accept=".xlsx,.xls" style="display:none">
                             <span id="instExcelStatus" class="anki-status" style="text-align:left;">${instExcelLoaded ? "✓ Excel loaded — textareas populated" : "No file selected."}</span>
+                            <a href="samples/sample-pao-system.xlsx" download style="color:var(--accent);font-size:0.85rem;">Download sample</a>
                         </div>
                         <details style="margin-top:8px;font-size:0.85rem;color:var(--modal-text-muted);">
                             <summary style="cursor:pointer;user-select:none;">Column assignment</summary>
@@ -7734,11 +7735,12 @@
 
                 // Step 4: Anki images (skippable) — mirrors Settings → Anki Images.
                 function renderInstallerAnkiImages(body) {
-                    body.appendChild(
-                        _installerPHtml(
-                            'The .txt exports below link your PAO terms to image filenames. To get the files, <a href="https://github.com/xiorter/pi-pao-practice/blob/main/docs/SETTING_UP_ANKI.md" target="_blank" rel="noopener" style="color:var(--accent)">read the Anki setup guide</a>.',
-                        ),
-                    );
+                    const intro = document.createElement("p");
+                    intro.style.cssText = "font-size:0.9rem;line-height:1.5;margin:0 0 8px 0;color:var(--modal-text-muted);";
+                    intro.innerHTML =
+                        'The .txt exports below link your PAO terms to image filenames. ' +
+                        '<button type="button" id="ankiGuideBtn" class="settings-btn" style="font-size:0.85rem;padding:2px 10px;">Anki setup guide</button>';
+                    body.appendChild(intro);
 
                     // .txt uploads — proxy through the real hidden inputs so all
                     // shared state (ankiImages, ankiImages2) is updated in one place.
@@ -7880,6 +7882,17 @@
                                 _installerUpdateNextButton();
                             };
                         }
+
+                        // Wire Anki guide modal
+                        const guideBtn = document.getElementById("ankiGuideBtn");
+                        const guideModal = document.getElementById("ankiGuideModal");
+                        if (guideBtn && guideModal) {
+                            guideBtn.onclick = () => { guideModal.style.display = "block"; };
+                        }
+                        const guideClose = document.getElementById("ankiGuideClose");
+                        const guideCloseBtn = document.getElementById("ankiGuideCloseBtn");
+                        if (guideClose) guideClose.onclick = () => { guideModal.style.display = "none"; };
+                        if (guideCloseBtn) guideCloseBtn.onclick = () => { guideModal.style.display = "none"; };
                     }, 0);
                 }
                 function _saveInstallerStudyBlocks() {
@@ -7945,7 +7958,7 @@
                     ta.placeholder =
                         '{"apiKey":"...","authDomain":"...","projectId":"...",...}';
                     ta.style.cssText =
-                        "width:100%;min-height:90px;font-family:monospace;font-size:0.8rem;padding:6px;background:var(--modal-input-bg);color:var(--modal-text-color);border:1px solid var(--modal-border);border-radius:4px;box-sizing:border-box;resize:vertical;";
+                        "width:100%;min-height:90px;font-family:monospace;font-size:0.8rem;padding:6px;background:var(--modal-input-bg);color:var(--modal-text-color);border:1px solid #ccc;border-radius:4px;box-sizing:border-box;resize:vertical;";
                     const existing = document.getElementById("firebaseConfigInput");
                     if (existing && existing.value) {
                         ta.value = existing.value;
