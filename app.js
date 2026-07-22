@@ -1766,7 +1766,7 @@
                     // the input only so the display shows them — skip all rating,
                     // crediting, and progress tracking.
                     if (skipProcessing) {
-                        sequenceStartIndex = 0;
+                        sequenceStartIndex = val.length;
                         currentInputLength = val.length;
                         _hintPos = val.length;
                         _lastSkipLength = val.length;
@@ -3381,10 +3381,8 @@
                                   }
                                  const _removeBtn = document.getElementById("piContextRemove");
                                  if (_removeBtn) {
-                                     if (_bd) {
-                                         _removeBtn.style.display = "none";
-                                     } else {
-                                         // Frontier block: show Reset button
+                                     if (_isPartial) {
+                                         // Frontier / partial block: show Reset
                                          _removeBtn.style.display = "";
                                          _removeBtn.textContent = "Reset";
                                          _removeBtn.onclick = (ev) => {
@@ -3397,14 +3395,17 @@
                                                  const _g = getGroupSizeForMode(_m);
                                                  _dpos += _g;
                                              }
+                                             delete studyBlockData[_thisBlock];
                                              blockProgress[_thisBlock] = 0;
                                              delete _blockRatings[_thisBlock];
                                              saveSettings();
                                              renderPiCoverage();
                                              updateGoalBarOnly();
-                                          hidePiContextMenu();
-                                          };
-                                      }
+                                             hidePiContextMenu();
+                                         };
+                                     } else {
+                                         _removeBtn.style.display = "none";
+                                     }
                                  }
                                  menu.style.display = "block";
                                 const pad = 4;
