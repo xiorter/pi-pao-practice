@@ -1468,6 +1468,7 @@
                         if (volSlider)
                             volSlider.value = Math.round(volume * 10);
                         if (savedPiValue && piInput) {
+                            skipProcessing = true;
                             piInput.value = savedPiValue;
                             checkPiDigits(piInput);
                         }
