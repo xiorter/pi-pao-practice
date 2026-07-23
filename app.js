@@ -1771,6 +1771,7 @@
                     // the input only so the display shows them — skip all rating,
                     // crediting, and progress tracking.
                     if (skipProcessing) {
+                        skipProcessing = false;
                         sequenceStartIndex = 0;
                         currentInputLength = val.length;
                         _hintPos = val.length;
@@ -1810,7 +1811,6 @@
                                 showToast(`${_tInfo.pTerm} / ${_tInfo.aTerm} / ${_tInfo.oTerm}`);
                             }
                         }
-                        setTimeout(() => { skipProcessing = false; }, 0);
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
