@@ -2059,8 +2059,10 @@
                                        // bar when reviewing due blocks. Also record a
                                        // neutral rating so the pi coverage outline
                                        // disappears (cell marked as completed today).
-                                        blockProgress[_bn] =
-                                            (blockProgress[_bn] || 0) + _gs_z;
+                                        if (!_alreadyRated) {
+                                            blockProgress[_bn] =
+                                                (blockProgress[_bn] || 0) + _gs_z;
+                                        }
                                         _blockRatings[_bn] = _blockRatings[_bn] || {};
                                         if (_blockRatings[_bn][_completedChunkStart] === undefined) {
                                             _blockRatings[_bn][_completedChunkStart] = 3;
