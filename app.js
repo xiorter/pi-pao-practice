@@ -2065,26 +2065,29 @@
                                         if (_blockRatings[_bn][_completedChunkStart] === undefined) {
                                             _blockRatings[_bn][_completedChunkStart] = 3;
                                         }
-                                      // If the block is now fully typed,
-                                      // finalise it as a study block.
-                                      if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
-                                          const { start: _bS, end: _bE } = blockRange(_bn);
-                                          studyBlockData[_bn] = {
-                                              start: _bS,
-                                              end: _bE,
-                                              dueDate: srsToday(),
-                                              interval: 1,
-                                              easeFactor: 2.5,
-                                              reviews: 0,
-                                              lapses: 0,
-                                          };
-                                          syncBlockDueDates();
-                                          saveSettings();
-                                      }
-                                      if (studyBlockData[_bn]) {
-                                          const { start: _bS, end: _bE } = blockRange(_bn);
-                                          if (blockProgress[_bn] >= _bE - _bS + 1) {
-                                              rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
+                                       // If the block is now fully typed,
+                                       // finalise it as a study block.
+                                       let _justFinalized = false;
+                                       if (isBlockComplete(_bn) && !studyBlockData[_bn]) {
+                                           const { start: _bS, end: _bE } = blockRange(_bn);
+                                           studyBlockData[_bn] = {
+                                               start: _bS,
+                                               end: _bE,
+                                               dueDate: srsToday(),
+                                               interval: 1,
+                                               easeFactor: 2.5,
+                                               reviews: 0,
+                                               lapses: 0,
+                                           };
+                                           syncBlockDueDates();
+                                           saveSettings();
+                                           showToast(`Block ${_bn + 1} completed — now due for review`);
+                                           _justFinalized = true;
+                                       }
+                                        if (studyBlockData[_bn] && !_justFinalized) {
+                                            const { start: _bS, end: _bE } = blockRange(_bn);
+                                            if (blockProgress[_bn] >= _bE - _bS + 1) {
+                                                rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
                                           }
                                       }
                                     srsUpdateBadge();
@@ -3971,14 +3974,16 @@
                             `</div></div>`;
                     }
                     // Note about where add-new-chunks will start
-                    const { start: _frS, end: _frE } = blockRange(frontier);
-                    const _frTyped = blockProgress[frontier] || 0;
-                    const _frDigits = _frE - _frS + 1;
-                    const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
-                    html += `<div class="checklist-entry" data-action="add">` +
+                    if (!isBlockComplete(frontier)) {
+                        const { start: _frS, end: _frE } = blockRange(frontier);
+                        const _frTyped = blockProgress[frontier] || 0;
+                        const _frDigits = _frE - _frS + 1;
+                        const _frPct = Math.min(100, Math.round((_frTyped / _frDigits) * 100));
+                        html += `<div class="checklist-entry" data-action="add">` +
                         `<div class="checklist-progress" style="width:${_frPct}%;"></div>` +
                         `<div class="checklist-text"><span class="checklist-label">+ Add new chunks (${_frS + 1}-${_frE + 1})</span>` +
                         ` <span class="checklist-counter">${_frTyped}/${_frDigits}</span></div></div>`;
+                    }
                     el.innerHTML = html;
                     // Wire clicks
                     el.querySelectorAll(".checklist-entry").forEach((item) => {
@@ -4307,7 +4312,7 @@
                         else if (r === 2) totalPoints += SEV_W_HARD;
                     }
                     const severity = Math.min(1, totalPoints / (2 * chunkCount));
-                    const isFirst = bd.interval === 0;
+                    const isFirst = bd.reviews === 0;
                     if (severity >= SEV_THRESH_HARD) {
                         bd.interval = isFirst ? 0 : 1;
                         bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.2);
@@ -4374,6 +4379,7 @@
                             if (srsData[p]) {
                                 srsData[p].dueDate = bd.dueDate;
                                 srsData[p].interval = bd.interval || 0;
+                                srsData[p].step = -1;
                             }
                             const m = getModeForPos(p + 1);
                             const gs = getGroupSizeForMode(m);
