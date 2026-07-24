@@ -2184,7 +2184,7 @@
 
                 function showHintLogic() {
                     const pos = _hintPos > 0 ? _hintPos : (sequenceStartIndex + currentInputLength);
-                    const gSize = getGroupSize();
+                    const gSize = getGroupSizeForMode(getModeForPos(Math.max(1, pos + 1)));
                     const startOfGroup = Math.floor(pos / gSize) * gSize;
                     const info = getPAOGroupDataByPos(startOfGroup);
                     if (info) {
@@ -6879,6 +6879,11 @@
                                          mistakeRedoStack = [];
                                           srsRate(currentTypingChunkPos, rk, null);
                                           const _bnS = blockForPos(currentTypingChunkPos);
+                                          // Count progress for manual ratings
+                                          if (!(_blockRatings[_bnS] && _blockRatings[_bnS][currentTypingChunkPos] !== undefined)) {
+                                              const _gsS = getGroupSizeForMode(getModeForPos(currentTypingChunkPos + 1));
+                                              blockProgress[_bnS] = (blockProgress[_bnS] || 0) + _gsS;
+                                          }
                                           _blockRatings[_bnS] = _blockRatings[_bnS] || {};
                                           _blockRatings[_bnS][currentTypingChunkPos] = rk;
                                           srsUpdateBadge();
@@ -6969,10 +6974,15 @@
                                             step: 0,
                                         };
                                     }
-                                    const _countedAsReview = srsRate(mistakePos, 1, srsIsDue(mistakePos)); // Again
-                                    const _bnM = blockForPos(mistakePos);
-                                    _blockRatings[_bnM] = _blockRatings[_bnM] || {};
-                                    _blockRatings[_bnM][mistakePos] = 1;
+                                     const _countedAsReview = srsRate(mistakePos, 1, srsIsDue(mistakePos)); // Again
+                                     const _bnM = blockForPos(mistakePos);
+                                     // Count progress for manual ratings
+                                     if (!(_blockRatings[_bnM] && _blockRatings[_bnM][mistakePos] !== undefined)) {
+                                         const _gsM = getGroupSizeForMode(getModeForPos(mistakePos + 1));
+                                         blockProgress[_bnM] = (blockProgress[_bnM] || 0) + _gsM;
+                                     }
+                                     _blockRatings[_bnM] = _blockRatings[_bnM] || {};
+                                     _blockRatings[_bnM][mistakePos] = 1;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardAgain,
@@ -7033,10 +7043,15 @@
                                             step: 0,
                                         };
                                     }
-                                    const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
-                                    const _bnH = blockForPos(mistakePos);
-                                    _blockRatings[_bnH] = _blockRatings[_bnH] || {};
-                                    _blockRatings[_bnH][mistakePos] = 4;
+                                     const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
+                                     const _bnH = blockForPos(mistakePos);
+                                     // Count progress for manual ratings
+                                     if (!(_blockRatings[_bnH] && _blockRatings[_bnH][mistakePos] !== undefined)) {
+                                         const _gsH = getGroupSizeForMode(getModeForPos(mistakePos + 1));
+                                         blockProgress[_bnH] = (blockProgress[_bnH] || 0) + _gsH;
+                                     }
+                                     _blockRatings[_bnH] = _blockRatings[_bnH] || {};
+                                     _blockRatings[_bnH][mistakePos] = 4;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardHard,
