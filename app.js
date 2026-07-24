@@ -2082,6 +2082,7 @@
                                                lapses: 0,
                                            };
                                            syncBlockDueDates();
+                                           blockProgress[_bn] = 0;
                                            saveSettings();
                                            showToast(`Block ${_bn + 1} completed — now due for review`);
                                            _justFinalized = true;
@@ -3976,7 +3977,15 @@
                             `</div></div>`;
                     }
                     // Note about where add-new-chunks will start
-                    if (!isBlockComplete(frontier)) {
+                    // Hide frontier entry for the rest of the day after
+                    // completing a block, so it doesn't jump to the next.
+                    const _today = srsToday();
+                    let _blockDoneToday = false;
+                    for (const _dStr in studyBlockData) {
+                        const _d = studyBlockData[_dStr];
+                        if (_d.dueDate === _today && _d.reviews === 0) { _blockDoneToday = true; break; }
+                    }
+                    if (!_blockDoneToday && !isBlockComplete(frontier)) {
                         const { start: _frS, end: _frE } = blockRange(frontier);
                         const _frTyped = blockProgress[frontier] || 0;
                         const _frDigits = _frE - _frS + 1;
