@@ -3368,6 +3368,17 @@
                                               studyBlockData[_thisBlock].dueDate = _d <= 0 ? srsToday() : srsDaysFromNow(_d);
                                               blockProgress[_thisBlock] = 0;
                                               delete _blockRatings[_thisBlock];
+                                              // Clear posTypedDates for the block so
+                                              // retyped chunks count toward progress.
+                                              const { start: _pdS, end: _pdE } = blockRange(_thisBlock);
+                                              let _pdP = snapToGroupStart(_pdS);
+                                              while (_pdP <= _pdE) {
+                                                  delete posTypedDates[_pdP];
+                                                  const _pdM = getModeForPos(_pdP + 1);
+                                                  const _pdG = getGroupSizeForMode(_pdM);
+                                                  if (_pdP + _pdG > _pdE + 1) break;
+                                                  _pdP += _pdG;
+                                              }
                                               syncBlockDueDates();
                                               saveSettings();
                                               renderPiCoverage();
@@ -3388,6 +3399,15 @@
                                               studyBlockData[_thisBlock].dueDate = srsToday();
                                               blockProgress[_thisBlock] = 0;
                                               delete _blockRatings[_thisBlock];
+                                              const { start: _pdS, end: _pdE } = blockRange(_thisBlock);
+                                              let _pdP = snapToGroupStart(_pdS);
+                                              while (_pdP <= _pdE) {
+                                                  delete posTypedDates[_pdP];
+                                                  const _pdM = getModeForPos(_pdP + 1);
+                                                  const _pdG = getGroupSizeForMode(_pdM);
+                                                  if (_pdP + _pdG > _pdE + 1) break;
+                                                  _pdP += _pdG;
+                                              }
                                               syncBlockDueDates();
                                               saveSettings();
                                               renderPiCoverage();
