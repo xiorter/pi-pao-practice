@@ -6886,9 +6886,10 @@
                                               blockProgress[_bnS] = (blockProgress[_bnS] || 0) + _gsS;
                                           }
                                           _blockRatings[_bnS] = _blockRatings[_bnS] || {};
-                                          _blockRatings[_bnS][currentTypingChunkPos] = rk;
-                                          srsUpdateBadge();
-                                         saveSettings();
+                                           _blockRatings[_bnS][currentTypingChunkPos] = rk;
+                                           srsUpdateBadge();
+                                           updateGoalBarOnly();
+                                          saveSettings();
                                          showToast("Chunk rated " + (rk === 1 ? "Again" : rk === 2 ? "Hard" : rk === 3 ? "Good" : "Easy"));
                                      }
                                  }
@@ -6994,9 +6995,10 @@
                                     if (mistakeUndoStack.length > 20)
                                         mistakeUndoStack.shift();
                                     currentChunkMistakePressed = true;
-                                    currentChunkLastRating = 1;
-                                    srsUpdateBadge();
-                                    // Toast showing PAO names
+                                     currentChunkLastRating = 1;
+                                     srsUpdateBadge();
+                                     updateGoalBarOnly();
+                                     // Toast showing PAO names
                                     const paoD = getPAOGroupDataByPos(
                                         mistakePos,
                                         _mode,
@@ -7063,9 +7065,10 @@
                                     if (mistakeUndoStack.length > 20)
                                         mistakeUndoStack.shift();
                                     currentChunkMistakePressed = true;
-                                    currentChunkLastRating = 4;
-                                    srsUpdateBadge();
-                                    const paoD = getPAOGroupDataByPos(
+                                     currentChunkLastRating = 4;
+                                     srsUpdateBadge();
+                                     updateGoalBarOnly();
+                                     const paoD = getPAOGroupDataByPos(
                                         mistakePos,
                                         _mode,
                                     );
