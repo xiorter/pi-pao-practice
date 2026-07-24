@@ -2054,15 +2054,17 @@
                                           _blockRatings[_bn] = _blockRatings[_bn] || {};
                                           _blockRatings[_bn][_completedChunkStart] = 3;
                                       }
-                                       // Count progress for every chunk completion
-                                       // (both new and existing) to fill the progress
-                                       // bar when reviewing due blocks. Also record a
-                                       // neutral rating so the pi coverage outline
-                                       // disappears (cell marked as completed today).
-                                        if (!_alreadyRated) {
-                                            blockProgress[_bn] =
-                                                (blockProgress[_bn] || 0) + _gs_z;
-                                        }
+                                        // Count progress for every chunk completion
+                                        // (both new and existing) to fill the progress
+                                        // bar when reviewing due blocks. Also record a
+                                        // neutral rating so the pi coverage outline
+                                        // disappears (cell marked as completed today).
+                                        // Guard with posTypedDates so each chunk counts
+                                        // once per day, even when manually re-rated.
+                                         if (posTypedDates[_completedChunkStart] !== srsToday()) {
+                                             blockProgress[_bn] =
+                                                 (blockProgress[_bn] || 0) + _gs_z;
+                                         }
                                         _blockRatings[_bn] = _blockRatings[_bn] || {};
                                         if (_blockRatings[_bn][_completedChunkStart] === undefined) {
                                             _blockRatings[_bn][_completedChunkStart] = 3;
@@ -6880,15 +6882,9 @@
                                          mistakeRedoStack = [];
                                           srsRate(currentTypingChunkPos, rk, null);
                                           const _bnS = blockForPos(currentTypingChunkPos);
-                                          // Count progress for manual ratings
-                                          if (!(_blockRatings[_bnS] && _blockRatings[_bnS][currentTypingChunkPos] !== undefined)) {
-                                              const _gsS = getGroupSizeForMode(getModeForPos(currentTypingChunkPos + 1));
-                                              blockProgress[_bnS] = (blockProgress[_bnS] || 0) + _gsS;
-                                          }
                                           _blockRatings[_bnS] = _blockRatings[_bnS] || {};
                                            _blockRatings[_bnS][currentTypingChunkPos] = rk;
                                            srsUpdateBadge();
-                                           updateGoalBarOnly();
                                           saveSettings();
                                          showToast("Chunk rated " + (rk === 1 ? "Again" : rk === 2 ? "Hard" : rk === 3 ? "Good" : "Easy"));
                                      }
@@ -6978,13 +6974,8 @@
                                     }
                                      const _countedAsReview = srsRate(mistakePos, 1, srsIsDue(mistakePos)); // Again
                                      const _bnM = blockForPos(mistakePos);
-                                     // Count progress for manual ratings
-                                     if (!(_blockRatings[_bnM] && _blockRatings[_bnM][mistakePos] !== undefined)) {
-                                         const _gsM = getGroupSizeForMode(getModeForPos(mistakePos + 1));
-                                         blockProgress[_bnM] = (blockProgress[_bnM] || 0) + _gsM;
-                                     }
-                                     _blockRatings[_bnM] = _blockRatings[_bnM] || {};
-                                     _blockRatings[_bnM][mistakePos] = 1;
+                                      _blockRatings[_bnM] = _blockRatings[_bnM] || {};
+                                      _blockRatings[_bnM][mistakePos] = 1;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardAgain,
@@ -6995,10 +6986,9 @@
                                     if (mistakeUndoStack.length > 20)
                                         mistakeUndoStack.shift();
                                     currentChunkMistakePressed = true;
-                                     currentChunkLastRating = 1;
-                                     srsUpdateBadge();
-                                     updateGoalBarOnly();
-                                     // Toast showing PAO names
+                                      currentChunkLastRating = 1;
+                                      srsUpdateBadge();
+                                      // Toast showing PAO names
                                     const paoD = getPAOGroupDataByPos(
                                         mistakePos,
                                         _mode,
@@ -7046,15 +7036,10 @@
                                             step: 0,
                                         };
                                     }
-                                     const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
-                                     const _bnH = blockForPos(mistakePos);
-                                     // Count progress for manual ratings
-                                     if (!(_blockRatings[_bnH] && _blockRatings[_bnH][mistakePos] !== undefined)) {
-                                         const _gsH = getGroupSizeForMode(getModeForPos(mistakePos + 1));
-                                         blockProgress[_bnH] = (blockProgress[_bnH] || 0) + _gsH;
-                                     }
-                                     _blockRatings[_bnH] = _blockRatings[_bnH] || {};
-                                     _blockRatings[_bnH][mistakePos] = 4;
+                                      const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
+                                      const _bnH = blockForPos(mistakePos);
+                                      _blockRatings[_bnH] = _blockRatings[_bnH] || {};
+                                      _blockRatings[_bnH][mistakePos] = 4;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardHard,
@@ -7065,10 +7050,9 @@
                                     if (mistakeUndoStack.length > 20)
                                         mistakeUndoStack.shift();
                                     currentChunkMistakePressed = true;
-                                     currentChunkLastRating = 4;
-                                     srsUpdateBadge();
-                                     updateGoalBarOnly();
-                                     const paoD = getPAOGroupDataByPos(
+                                      currentChunkLastRating = 4;
+                                      srsUpdateBadge();
+                                      const paoD = getPAOGroupDataByPos(
                                         mistakePos,
                                         _mode,
                                     );
