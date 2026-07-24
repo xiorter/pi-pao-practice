@@ -3979,12 +3979,13 @@
                     // Note about where add-new-chunks will start
                     // Hide frontier entry for the rest of the day after
                     // completing a block, so it doesn't jump to the next.
+                    // Only the block at frontier-1 (the one that was just
+                    // completed) triggers the hide, not arbitrary reviews.
                     const _today = srsToday();
-                    let _blockDoneToday = false;
-                    for (const _dStr in studyBlockData) {
-                        const _d = studyBlockData[_dStr];
-                        if (_d.dueDate === _today && _d.reviews === 0) { _blockDoneToday = true; break; }
-                    }
+                    const _prevBlock = studyBlockData[frontier - 1];
+                    const _blockDoneToday = _prevBlock &&
+                        _prevBlock.dueDate === _today &&
+                        _prevBlock.reviews === 0;
                     if (!_blockDoneToday && !isBlockComplete(frontier)) {
                         const { start: _frS, end: _frE } = blockRange(frontier);
                         const _frTyped = blockProgress[frontier] || 0;
