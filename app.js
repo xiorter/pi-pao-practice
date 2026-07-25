@@ -3326,7 +3326,7 @@
                                 const menu = document.getElementById("piContextMenu");
                                 if (!menu) return;
                                  const _bd = studyBlockData[_thisBlock];
-                                 const _isPartial = !_bd || _bd.interval === 0;
+                                 const _isPartial = !_bd;
                                  const _h = menu.querySelector(".pi-context-header");
                                  if (_h) _h.textContent = `Block ${_thisBlock + 1}`;
                                  const _info = menu.querySelector(".pi-context-info");
