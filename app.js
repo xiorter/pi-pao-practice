@@ -1810,6 +1810,10 @@
                                 showToast(`${_tInfo.pTerm} / ${_tInfo.aTerm} / ${_tInfo.oTerm}`);
                             }
                         }
+                        // Sync daily credit state so the loaded digits aren't
+                        // credited as new typing on the next keystroke.
+                        dailyCreditedSeqStart = sequenceStartIndex;
+                        dailyCreditedMaxLength = val.length;
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
