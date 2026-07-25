@@ -6052,8 +6052,8 @@
                               }
                               return names;
                           };
-                          const _centExpected = _cnt(ankiImages2);
-                          const _millExpected = _cnt(ankiImages);
+                          const _centExpected = new Set([..._cnt(ankiImages2)].filter(f => !f.startsWith("http")));
+                          const _millExpected = new Set([..._cnt(ankiImages)].filter(f => !f.startsWith("http")));
                           const _centLoaded = [..._centExpected].filter(f => mediaFileMap[f]).length;
                           const _millLoaded = [..._millExpected].filter(f => mediaFileMap[f]).length;
                           const parts = [];
@@ -6065,8 +6065,8 @@
                               el.className = "anki-status js-media-status" + (loaded ? " loaded" : "");
                           });
                           // Show missing files in a collapsible element
-                          const _missing = [..._centExpected].filter(f => !mediaFileMap[f]).concat(
-                              [..._millExpected].filter(f => !mediaFileMap[f]));
+                          const _missing = [..._centExpected].filter(f => !mediaFileMap[f] && !f.startsWith("http")).concat(
+                              [..._millExpected].filter(f => !mediaFileMap[f] && !f.startsWith("http")));
                           document.querySelectorAll(".js-missing-media").forEach(el => {
                               if (_missing.length === 0) { el.style.display = "none"; return; }
                               el.style.display = "";
@@ -6260,18 +6260,9 @@
                                 if (!files.length) return;
 
                                  // Show loading animation — cycle through dot patterns
-                                 let _dotIdx = 0;
-                                 const _dots = ["", ".", "..", "..."];
-                                 const _loadingInt = setInterval(() => {
-                                     _dotIdx = (_dotIdx + 1) % _dots.length;
-                                     const txt = `Loading images${_dots[_dotIdx]}`;
-                                     document.querySelectorAll(".js-media-status").forEach(el => {
-                                         el.textContent = txt;
-                                         el.className = "anki-status js-media-status";
-                                     });
-                                 }, 400);
+                                 _setMediaStatus("Loading images…");
                                  setTimeout(() => {
-                                    // Build neededFiles set from loaded txts
+                                     // Build neededFiles set from loaded txts
                                     const neededFiles = new Set();
                                     for (const map of [ankiImages, ankiImages2]) {
                                         for (const entry of Object.values(map)) {
@@ -6294,10 +6285,9 @@
                                         accepted.push(file);
                                     }
 
-                                     mediaFolderName = "selected files";
-                                     saveSettings();
-                                     clearInterval(_loadingInt);
-                                     _setMediaStatus("✓ Media loaded.", true);
+                                      mediaFolderName = "selected files";
+                                      saveSettings();
+                                      _setMediaStatus("✓ Media loaded.", true);
 
                                     // Persist to IDB in background — don't block the UI.
                                     if (accepted.length > 0) {
