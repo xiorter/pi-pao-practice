@@ -119,6 +119,9 @@
 .dark-mode .anki-status {
     color: var(--modal-text-muted);
 }
+.anki-status.loaded {
+    color: #52a852;
+}
 .dark-mode #settingsForm legend {
     color: var(--modal-text-muted-2);
 }

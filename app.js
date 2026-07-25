@@ -6259,9 +6259,13 @@
                                 ev.target.value = "";
                                 if (!files.length) return;
 
-                                 // Show loading animation — cycle through dot patterns
-                                 _setMediaStatus("Loading images…");
-                                 setTimeout(() => {
+                                  // Set "Loading images…" directly on DOM so it paints
+                                  // before the slow _setMediaStatus computation runs.
+                                  document.querySelectorAll(".js-media-status").forEach(el => {
+                                      el.textContent = "Loading images…";
+                                      el.className = "anki-status js-media-status";
+                                  });
+                                  setTimeout(() => {
                                      // Build neededFiles set from loaded txts
                                     const neededFiles = new Set();
                                     for (const map of [ankiImages, ankiImages2]) {
