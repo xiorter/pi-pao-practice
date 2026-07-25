@@ -937,12 +937,7 @@
                         filename.startsWith("blob:")
                     )
                         return filename;
-                    return (
-                        mediaFileMap[filename] ||
-                        (ankiMediaPath
-                            ? ankiMediaPath + "/" + filename
-                            : filename)
-                    );
+                    return mediaFileMap[filename] || null;
                 }
 
                 // --- Hover Image Popup ---
@@ -6043,12 +6038,37 @@
                     }
 
                     // Updates every .js-media-status element (settings + installer).
-                    function _setMediaStatus(text, loaded) {
-                        document.querySelectorAll(".js-media-status").forEach(el => {
-                            el.textContent = text;
-                            el.className = "anki-status js-media-status" + (loaded ? " loaded" : "");
-                        });
-                    }
+                      function _setMediaStatus(text, loaded) {
+                          // Compute expected vs loaded counts
+                          const _cnt = (map) => {
+                              const names = new Set();
+                              for (const e of Object.values(map)) {
+                                  if (e.personSrc) names.add(e.personSrc);
+                                  if (e.objectSrc) names.add(e.objectSrc);
+                              }
+                              return names;
+                          };
+                          const _centExpected = _cnt(ankiImages2);
+                          const _millExpected = _cnt(ankiImages);
+                          const _centLoaded = [..._centExpected].filter(f => mediaFileMap[f]).length;
+                          const _millLoaded = [..._millExpected].filter(f => mediaFileMap[f]).length;
+                          const parts = [];
+                          if (_centExpected.size > 0) parts.push(`${_centLoaded}/${_centExpected.size} Century`);
+                          if (_millExpected.size > 0) parts.push(`${_millLoaded}/${_millExpected.size} Millennium`);
+                          const mainText = parts.length > 0 ? parts.join(" │ ") : text;
+                          document.querySelectorAll(".js-media-status").forEach(el => {
+                              el.textContent = mainText;
+                              el.className = "anki-status js-media-status" + (loaded ? " loaded" : "");
+                          });
+                          // Show missing files in a collapsible element
+                          const _missing = [..._centExpected].filter(f => !mediaFileMap[f]).concat(
+                              [..._millExpected].filter(f => !mediaFileMap[f]));
+                          document.querySelectorAll(".js-missing-media").forEach(el => {
+                              if (_missing.length === 0) { el.style.display = "none"; return; }
+                              el.style.display = "";
+                              el.innerHTML = `<details style="font-size:0.8rem;margin-top:4px;"><summary>${_missing.length} image${_missing.length !== 1 ? "s" : ""} not found</summary><div style="max-height:100px;overflow-y:auto;padding:4px 0;">${_missing.map(f => `<div style="white-space:nowrap;text-overflow:ellipsis;overflow:hidden;">${f}</div>`).join("")}</div></details>`;
+                          });
+                      }
 
                     // Sets a coloured border on a Firebase config textarea based on
                     // whether its content is valid parseable JSON with required keys.
@@ -6638,8 +6658,8 @@
                             // Don't intercept 1-4 if the user is typing in a
                             // seek input (position or image number box).
                             const _isInput =
-                                document.activeElement &&
-                                document.activeElement.tagName === "INPUT";
+                                e.target &&
+                                e.target.tagName === "INPUT";
                             const _ratingKey =
                                 !_isInput &&
                                 e.key === "1"
@@ -7825,7 +7845,7 @@
                             <button type="button" id="instMediaFilesBtn" class="settings-btn">Select image files…</button>
                             <input type="file" id="instMediaFiles" multiple accept="image/*" style="display:none">
                         </div>
-                        <div id="instMediaStatus" class="anki-status js-media-status${Object.keys(mediaFileMap).length > 0 ? ' loaded' : ''}" style="text-align:left;">${Object.keys(mediaFileMap).length > 0 ? '✓ Media loaded.' : 'No media selected.'}</div>`;
+                         <div id="instMediaStatus" class="anki-status js-media-status${Object.keys(mediaFileMap).length > 0 ? ' loaded' : ''}" style="text-align:left;">${Object.keys(mediaFileMap).length > 0 ? '✓ Media loaded.' : 'No media selected.'}</div><div class="js-missing-media" style="display:none"></div>`;
                     body.appendChild(media);
 
                     setTimeout(() => {
