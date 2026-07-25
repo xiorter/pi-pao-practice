@@ -873,10 +873,14 @@
                     if (s.startsWith('"') && s.endsWith('"'))
                         s = s.slice(1, -1);
                     s = s.replace(/""/g, '"');
-                    // Now extract src="..." or src='...'
-                    const m = s.match(/src=["']([^"']+)["']/i);
-                    if (!m) return null;
-                    const src = m[1];
+                    // Extract src="..." using indexOf to handle filenames
+                    // containing ' (single quotes in URLs, possessive names, etc.)
+                    const idx = s.indexOf('src="');
+                    if (idx === -1) return null;
+                    const start = idx + 5;
+                    const end = s.indexOf('"', start);
+                    if (end === -1) return null;
+                    const src = s.substring(start, end);
                     if (!src || src.trim() === "") return null;
                     return src.trim();
                 }
@@ -919,7 +923,7 @@
                     }
                     console.log(
                         "[Anki] parsed entries:",
-                        Object.keys(result).length / 3,
+                        new Set(Object.values(result)).size,
                         "| sample 86:",
                         result["86"],
                         "| sample 864:",
@@ -1483,22 +1487,22 @@
                             everestEasyModeEl.checked = everestEasyMode;
                         everestRefreshHSDisplay();
 
-                        const count = Object.keys(ankiImages).length;
+                        const count = new Set(Object.values(ankiImages)).size;
                         const statusEl =
                             document.getElementById("ankiLoadStatus");
                         if (count > 0) {
-                            statusEl.textContent = `✓ ${Math.round(count / 3)} entries loaded`;
+                            statusEl.textContent = `✓ ${count} entries loaded`;
                             statusEl.className = "anki-status loaded";
                         } else {
                             statusEl.textContent = "No file loaded.";
                             statusEl.className = "anki-status";
                         }
-                        const count2 = Object.keys(ankiImages2).length;
+                        const count2 = new Set(Object.values(ankiImages2)).size;
                         const statusEl2 =
                             document.getElementById("ankiLoadStatus2");
                         if (statusEl2) {
                             if (count2 > 0) {
-                                statusEl2.textContent = `✓ ${Math.round(count2 / 3)} entries loaded`;
+                                statusEl2.textContent = `✓ ${count2} entries loaded`;
                                 statusEl2.className = "anki-status loaded";
                             } else {
                                 statusEl2.textContent = "No file loaded.";
@@ -6255,10 +6259,18 @@
                                 ev.target.value = "";
                                 if (!files.length) return;
 
-                                // Show feedback and yield so the browser can
-                                // paint before the URL-creation loop runs.
-                                _setMediaStatus(`Reading ${files.length} file${files.length === 1 ? "" : "s"}…`);
-                                setTimeout(() => {
+                                 // Show loading animation — cycle through dot patterns
+                                 let _dotIdx = 0;
+                                 const _dots = ["", ".", "..", "..."];
+                                 const _loadingInt = setInterval(() => {
+                                     _dotIdx = (_dotIdx + 1) % _dots.length;
+                                     const txt = `Loading images${_dots[_dotIdx]}`;
+                                     document.querySelectorAll(".js-media-status").forEach(el => {
+                                         el.textContent = txt;
+                                         el.className = "anki-status js-media-status";
+                                     });
+                                 }, 400);
+                                 setTimeout(() => {
                                     // Build neededFiles set from loaded txts
                                     const neededFiles = new Set();
                                     for (const map of [ankiImages, ankiImages2]) {
@@ -6282,9 +6294,10 @@
                                         accepted.push(file);
                                     }
 
-                                    mediaFolderName = "selected files";
-                                    saveSettings();
-                                    _setMediaStatus("✓ Media loaded.", true);
+                                     mediaFolderName = "selected files";
+                                     saveSettings();
+                                     clearInterval(_loadingInt);
+                                     _setMediaStatus("✓ Media loaded.", true);
 
                                     // Persist to IDB in background — don't block the UI.
                                     if (accepted.length > 0) {
@@ -7822,10 +7835,10 @@
                     upWrap.innerHTML = `
                         <label style="font-weight:bold">Millennium PAO — 3-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt1" accept=".txt">
-                        <div id="instAnkiStatus1" class="anki-status${Object.keys(ankiImages).length > 0 ? ' loaded' : ''}">${Object.keys(ankiImages).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages).length/3)} entries loaded` : "No file loaded."}</div>
+                        <div id="instAnkiStatus1" class="anki-status${Object.keys(ankiImages).length > 0 ? ' loaded' : ''}">${Object.keys(ankiImages).length > 0 ? `✓ ${new Set(Object.values(ankiImages)).size} entries loaded` : "No file loaded."}</div>
                         <label style="font-weight:bold">Century PAO — 2-digit images (.txt):</label>
                         <input type="file" id="instAnkiTxt2" accept=".txt">
-                        <div id="instAnkiStatus2" class="anki-status${Object.keys(ankiImages2).length > 0 ? ' loaded' : ''}">${Object.keys(ankiImages2).length > 0 ? `✓ ${Math.round(Object.keys(ankiImages2).length/3)} entries loaded` : "No file loaded."}</div>`;
+                        <div id="instAnkiStatus2" class="anki-status${Object.keys(ankiImages2).length > 0 ? ' loaded' : ''}">${Object.keys(ankiImages2).length > 0 ? `✓ ${new Set(Object.values(ankiImages2)).size} entries loaded` : "No file loaded."}</div>`;
                     body.appendChild(upWrap);
 
                     // Media loaders — same set of buttons as Settings → Anki Images.
