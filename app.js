@@ -3365,6 +3365,7 @@
                                           const _d = parseInt(document.getElementById("piContextDays").value) || 0;
                                           if (studyBlockData[_thisBlock]) {
                                               studyBlockData[_thisBlock].dueDate = _d <= 0 ? srsToday() : srsDaysFromNow(_d);
+                                              studyBlockData[_thisBlock].interval = 1;
                                               blockProgress[_thisBlock] = 0;
                                               delete _blockRatings[_thisBlock];
                                               // Clear posTypedDates for the block so
@@ -3396,6 +3397,7 @@
                                           ev.stopPropagation();
                                           if (studyBlockData[_thisBlock]) {
                                               studyBlockData[_thisBlock].dueDate = srsToday();
+                                              studyBlockData[_thisBlock].interval = 1;
                                               blockProgress[_thisBlock] = 0;
                                               delete _blockRatings[_thisBlock];
                                               const { start: _pdS, end: _pdE } = blockRange(_thisBlock);
