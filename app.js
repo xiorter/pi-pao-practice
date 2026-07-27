@@ -3948,32 +3948,26 @@
                 // within those blocks today.
                 function computeActiveGoal() {
                     const today = srsToday();
-                    let goal = 0,
-                        progress = 0;
+                    let goal = 0;
                     // Due blocks
                     for (const bnStr in studyBlockData) {
                         const bn = parseInt(bnStr);
                         const bd = studyBlockData[bn];
                         if (bd.dueDate <= today) {
                             const { start, end } = blockRange(bn);
-                            const blockDigits = end - start + 1;
-                            goal += blockDigits;
-                            const typed = blockProgress[bn] || 0;
-                            progress += Math.min(typed, blockDigits);
+                            goal += end - start + 1;
                         }
                     }
-                    // New frontier: first block that either isn't in studyBlockData
-                    // or is incomplete. Walk from block 0 upward.
+                    // New frontier
                     let maxBlock = 0;
                     for (const bnStr in studyBlockData) {
                         maxBlock = Math.max(maxBlock, parseInt(bnStr));
                     }
-                    const checkBlock = maxBlock + 1;
-                    const { start, end } = blockRange(checkBlock);
-                    const blockDigits = end - start + 1;
-                    goal += blockDigits;
-                    const typed = blockProgress[checkBlock] || 0;
-                    progress += Math.min(typed, blockDigits);
+                    const { start: _fS, end: _fE } = blockRange(maxBlock + 1);
+                    goal += _fE - _fS + 1;
+                    // Use dailyStats[today] for progress — counts every digit
+                    // typed today regardless of block resets.
+                    const progress = Math.min(dailyStats[today] || 0, goal);
                     return { goal, progress };
                 }
 
