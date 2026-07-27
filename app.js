@@ -1823,6 +1823,8 @@
                     // value that skipProcessing rendered is skipped.
                     if (val.length === _lastSkipLength) {
                         input.value = val; // strip non-digits even on guard
+                        creditDailyDigits(val);
+                        updateGoalBarOnly();
                         return;
                     }
                     _lastSkipLength = -1; // first real event of any length
@@ -3946,29 +3948,30 @@
                 // Returns the total digits the user should type today
                 // (due blocks + new frontier) and how many they've typed
                 // within those blocks today.
+                let _cachedGoal = 0;
+                let _cachedGoalDate = "";
                 function computeActiveGoal() {
                     const today = srsToday();
-                    let goal = 0;
-                    // Due blocks
-                    for (const bnStr in studyBlockData) {
-                        const bn = parseInt(bnStr);
-                        const bd = studyBlockData[bn];
-                        if (bd.dueDate <= today) {
-                            const { start, end } = blockRange(bn);
-                            goal += end - start + 1;
+                    if (_cachedGoalDate !== today) {
+                        _cachedGoalDate = today;
+                        _cachedGoal = 0;
+                        for (const bnStr in studyBlockData) {
+                            const bn = parseInt(bnStr);
+                            const bd = studyBlockData[bn];
+                            if (bd.dueDate <= today) {
+                                const { start, end } = blockRange(bn);
+                                _cachedGoal += end - start + 1;
+                            }
                         }
+                        let maxBlock = 0;
+                        for (const bnStr in studyBlockData) {
+                            maxBlock = Math.max(maxBlock, parseInt(bnStr));
+                        }
+                        const { start: _fS, end: _fE } = blockRange(maxBlock + 1);
+                        _cachedGoal += _fE - _fS + 1;
                     }
-                    // New frontier
-                    let maxBlock = 0;
-                    for (const bnStr in studyBlockData) {
-                        maxBlock = Math.max(maxBlock, parseInt(bnStr));
-                    }
-                    const { start: _fS, end: _fE } = blockRange(maxBlock + 1);
-                    goal += _fE - _fS + 1;
-                    // Use dailyStats[today] for progress — counts every digit
-                    // typed today regardless of block resets.
-                    const progress = Math.min(dailyStats[today] || 0, goal);
-                    return { goal, progress };
+                    const progress = Math.min(dailyStats[today] || 0, _cachedGoal);
+                    return { goal: _cachedGoal, progress };
                 }
 
                 function renderChecklist() {
