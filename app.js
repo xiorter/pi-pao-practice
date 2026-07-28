@@ -2899,13 +2899,13 @@
                             if (val[i] === PI_DIGITS[sequenceStartIndex + i])
                                 newCorrect++;
                         }
-                        if (newCorrect > 0) {
-                            dailyStats[today] =
-                                (dailyStats[today] || 0) + newCorrect;
-                            dailyCreditedAmount += newCorrect;
-                        }
-                        dailyCreditedMaxLength = val.length;
-                    }
+                         if (newCorrect > 0) {
+                             dailyStats[today] =
+                                 (dailyStats[today] || 0) + newCorrect;
+                             dailyCreditedAmount += newCorrect;
+                             dailyCreditedMaxLength = val.length;
+                         }
+                     }
                     // val.length <= dailyCreditedMaxLength (i.e. backspaced within already-
                     // credited territory): nothing to do. The max stays put so retyping the
                     // same ground doesn't get credited a second time.
