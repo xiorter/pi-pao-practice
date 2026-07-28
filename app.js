@@ -1312,6 +1312,8 @@
                         studyBlockData = s.studyBlockData || {};
                         studyBlocksMigrated = s.studyBlocksMigrated ?? false;
                         blockProgress = s.blockProgress || {};
+                        _cachedGoal = s._cachedGoal || 0;
+                        _cachedGoalDate = s._cachedGoalDate || "";
                         _blockRatings = s._blockRatings || {};
                         _blockProgressDate = s._blockProgressDate || "";
                         currentScale = s.currentScale || "major";
@@ -1739,6 +1741,8 @@
                         studyBlockData,
                         studyBlocksMigrated,
                         blockProgress,
+                        _cachedGoal,
+                        _cachedGoalDate,
                         _blockRatings,
                         _blockProgressDate,
                         darkMode,
