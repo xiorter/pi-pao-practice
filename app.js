@@ -2077,8 +2077,10 @@
                                             (_existingCard.step === undefined || _existingCard.step < 0));
                                       if (!_alreadyRated && _isNewCard && !currentChunkMistakePressed) {
                                           srsRate(_completedChunkStart, 3, null); // Good
-                                          _blockRatings[_bn] = _blockRatings[_bn] || {};
-                                          _blockRatings[_bn][_completedChunkStart] = 3;
+                                          if (studyBlockData[_bn]) {
+                                              _blockRatings[_bn] = _blockRatings[_bn] || {};
+                                              _blockRatings[_bn][_completedChunkStart] = 3;
+                                          }
                                       }
                                         // Count progress for every chunk completion
                                         // (both new and existing) to fill the progress
@@ -2091,9 +2093,11 @@
                                              blockProgress[_bn] =
                                                  (blockProgress[_bn] || 0) + _gs_z;
                                          }
-                                        _blockRatings[_bn] = _blockRatings[_bn] || {};
-                                        if (_blockRatings[_bn][_completedChunkStart] === undefined) {
-                                            _blockRatings[_bn][_completedChunkStart] = 3;
+                                        if (studyBlockData[_bn]) {
+                                            _blockRatings[_bn] = _blockRatings[_bn] || {};
+                                            if (_blockRatings[_bn][_completedChunkStart] === undefined) {
+                                                _blockRatings[_bn][_completedChunkStart] = 3;
+                                            }
                                         }
                                        // If the block is now fully typed,
                                        // finalise it as a study block.
