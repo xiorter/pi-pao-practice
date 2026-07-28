@@ -7104,10 +7104,10 @@
                                             step: 0,
                                         };
                                     }
-                                      const _countedAsReview = srsRate(mistakePos, 4, srsIsDue(mistakePos)); // Hard
+                                      const _countedAsReview = srsRate(mistakePos, 2, srsIsDue(mistakePos)); // Hard
                                       const _bnH = blockForPos(mistakePos);
                                       _blockRatings[_bnH] = _blockRatings[_bnH] || {};
-                                      _blockRatings[_bnH][mistakePos] = 4;
+                                      _blockRatings[_bnH][mistakePos] = 2;
                                     mistakeUndoStack.push({
                                         pos: mistakePos,
                                         oldCard: _oldCardHard,
