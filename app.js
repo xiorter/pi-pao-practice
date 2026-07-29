@@ -7159,10 +7159,13 @@
                                         if (undo.oldCard)
                                             srsData[undo.pos] = undo.oldCard;
                                         else delete srsData[undo.pos];
+                                        // Clear _blockRatings for this chunk
+                                        const _undoBn = blockForPos(undo.pos);
+                                        if (_blockRatings[_undoBn]) delete _blockRatings[_undoBn][undo.pos];
                                         srsUpdateBadge();
                                         saveSettings();
                                         const d = undo.digits || "chunk";
-                                        const ratingLabel = undo.rating === 4 ? "Hard" : "Again";
+                                        const ratingLabel = undo.rating === 1 ? "Again" : undo.rating === 2 ? "Hard" : undo.rating === 3 ? "Good" : "Easy";
                                         showToast(
                                             `↩ ${d} unrated (was ${ratingLabel})`,
                                         );
@@ -7205,9 +7208,13 @@
                                         if (redo.newCard)
                                             srsData[redo.pos] = redo.newCard;
                                         else delete srsData[redo.pos];
+                                        // Re-record _blockRatings for severity
+                                        const _redoBn = blockForPos(redo.pos);
+                                        _blockRatings[_redoBn] = _blockRatings[_redoBn] || {};
+                                        _blockRatings[_redoBn][redo.pos] = redo.rating;
                                         srsUpdateBadge();
                                         saveSettings();
-                                        const ratingLabel = redo.rating === 4 ? "Hard" : "Again";
+                                        const ratingLabel = redo.rating === 1 ? "Again" : redo.rating === 2 ? "Hard" : redo.rating === 3 ? "Good" : "Easy";
                                         showToast(
                                             `↪ ${digits} re-rated as ${ratingLabel}`,
                                         );

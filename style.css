@@ -198,8 +198,8 @@
 }
 
 /* --- Dark mode: SRS cards --- */
-.dark-mode 
-.dark-mode 
+.dark-mode
+.dark-mode
 
 
 
@@ -578,7 +578,7 @@ input[type="text"]#piInput:focus {
 }
 
 #output {
-    font-size: 2.2rem;
+    font-size: 2.3rem;
     font-weight: 400;
     display: grid;
     grid-template-columns: repeat(auto-fill, 6.8ch);
