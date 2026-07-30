@@ -1820,6 +1820,7 @@
                         // credited as new typing on the next keystroke.
                         dailyCreditedSeqStart = sequenceStartIndex;
                         dailyCreditedMaxLength = val.length;
+                        dailyCreditedDate = srsToday();
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
