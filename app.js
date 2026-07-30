@@ -2033,10 +2033,8 @@
                                         `Chunk at #${_completedChunkStart + 1} not added. Max is at #${_maxCardPos + 1}`,
                                     );
                                  } else {
-                                     // Within range. If this chunk completes
-                                     // its block, reject it unless every digit
-                                     // is correct (no wrong digits in the
-                                     // final chunk).
+                                     // Within range. Only process if every
+                                     // digit in this chunk is correct.
                                      const _bn = blockForPos(
                                          _completedChunkStart,
                                      );
@@ -2045,23 +2043,15 @@
                                              _completedChunkStart + 1,
                                          ),
                                      );
-                                     const _isLastChunk = !studyBlockData[_bn] &&
-                                         isBlockComplete(_bn) &&
-                                         !srsData[_completedChunkStart];
-                                     if (_isLastChunk) {
-                                         let _allOk = true;
-                                         const _chunkValOffset = _completedChunkStart - sequenceStartIndex;
-                                         for (let _cd = 0; _cd < _gs_z; _cd++) {
-                                             if (val[_chunkValOffset + _cd] !== PI_DIGITS[_completedChunkStart + _cd]) {
-                                                 _allOk = false;
-                                                 break;
-                                             }
-                                         }
-                                         if (!_allOk) {
-                                             showToast("Fix the incorrect digit to complete this block");
+                                     let _allCorrect = true;
+                                     const _chunkOffset = _completedChunkStart - sequenceStartIndex;
+                                     for (let _ci = 0; _ci < _gs_z; _ci++) {
+                                         if (val[_chunkOffset + _ci] !== PI_DIGITS[_completedChunkStart + _ci]) {
+                                             _allCorrect = false;
+                                             break;
                                          }
                                      }
-                                     if (!_isLastChunk || _allOk) {
+                                     if (_allCorrect) {
                                       if (!srsData[_completedChunkStart]) {
                                           srsAddCard(_completedChunkStart);
                                       }
