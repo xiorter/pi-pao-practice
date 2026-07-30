@@ -1316,6 +1316,7 @@
                         _cachedGoalDate = s._cachedGoalDate || "";
                         _blockRatings = s._blockRatings || {};
                         _blockProgressDate = s._blockProgressDate || "";
+                        dailyCreditedDate = s.dailyCreditedDate || "";
                         currentScale = s.currentScale || "major";
                         currentWaveform = s.currentWaveform || "sine";
                         useCustomBg = s.useCustomBg ?? false;
@@ -1745,6 +1746,7 @@
                         _cachedGoalDate,
                         _blockRatings,
                         _blockProgressDate,
+                        dailyCreditedDate,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -2113,10 +2115,20 @@
                                                reviews: 0,
                                                lapses: 0,
                                            };
-                                           syncBlockDueDates();
-                                           blockProgress[_bn] = 0;
-                                           saveSettings();
-                                           showToast(`Block ${_bn + 1} completed — now due for review`);
+                                            syncBlockDueDates();
+                                            blockProgress[_bn] = 0;
+                                            saveSettings();
+                                            // Clear posTypedDates so same-day review
+                                            // counts progress from scratch.
+                                            let _ptP = snapToGroupStart(_bS);
+                                            while (_ptP <= _bE) {
+                                                delete posTypedDates[_ptP];
+                                                const _ptM = getModeForPos(_ptP + 1);
+                                                const _ptG = getGroupSizeForMode(_ptM);
+                                                if (_ptP + _ptG > _bE + 1) break;
+                                                _ptP += _ptG;
+                                            }
+                                            showToast(`Block ${_bn + 1} completed — now due for review`);
                                            _justFinalized = true;
                                        }
                                         if (studyBlockData[_bn] && !_justFinalized) {
