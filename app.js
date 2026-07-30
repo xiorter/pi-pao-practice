@@ -4032,13 +4032,8 @@
                     // Note about where add-new-chunks will start
                     // Hide frontier entry for the rest of the day after
                     // completing a block, so it doesn't jump to the next.
-                    // Only the block at frontier-1 (the one that was just
-                    // completed) triggers the hide, not arbitrary reviews.
-                    const _today = srsToday();
-                    const _prevBlock = studyBlockData[frontier - 1];
-                    const _blockDoneToday = _prevBlock &&
-                        _prevBlock.dueDate === _today;
-                    if (!_blockDoneToday && !isBlockComplete(frontier)) {
+                    // Frontier "Add new chunks" entry — always visible.
+                    if (!isBlockComplete(frontier)) {
                         const { start: _frS, end: _frE } = blockRange(frontier);
                         const _frTyped = blockProgress[frontier] || 0;
                         const _frDigits = _frE - _frS + 1;
@@ -6696,8 +6691,8 @@
                             // Don't intercept 1-4 if the user is typing in a
                             // seek input (position or image number box).
                             const _isInput =
-                                e.target &&
-                                e.target.tagName === "INPUT";
+                                (e.target && e.target.tagName === "INPUT") ||
+                                (document.activeElement && document.activeElement.tagName === "INPUT");
                             const _ratingKey =
                                 !_isInput &&
                                 e.key === "1"
