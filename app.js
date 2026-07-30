@@ -4036,8 +4036,7 @@
                     const _today = srsToday();
                     const _prevBlock = studyBlockData[frontier - 1];
                     const _blockDoneToday = _prevBlock &&
-                        _prevBlock.dueDate === _today &&
-                        _prevBlock.reviews === 0;
+                        _prevBlock.dueDate === _today;
                     if (!_blockDoneToday && !isBlockComplete(frontier)) {
                         const { start: _frS, end: _frE } = blockRange(frontier);
                         const _frTyped = blockProgress[frontier] || 0;
