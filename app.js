@@ -111,9 +111,10 @@
                 // Heatmap/picoverage colour schemes (light → dark).
                 // Empty-cell color is mode-aware (#EAEAEA light / #222222 dark) and set in CSS.
                 const HEATMAP_SCHEMES = {
-                    ice: { light: "#95C8F3", dark: "#0063DE", overdue: "#003280" },
+                    ice: { light: "#95C8F3", mid: "#EA4E9C", dark: "#0063DE", overdue: "#003280" },
                     magenta: {
                         light: "#ffb8d9",
+                        mid: "#EA4E9C",
                         dark: "#5c2657",
                         overdue: "#3a0050",
                     },
@@ -2126,6 +2127,11 @@
                                             const { start: _bS, end: _bE } = blockRange(_bn);
                                             if (blockProgress[_bn] >= _bE - _bS + 1) {
                                                 rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
+                                                // Auto-advance to the next due block.
+                                                const _next = findNextDueBlock();
+                                                if (_next !== null) {
+                                                    setTimeout(() => loadBlockIntoInput(_next), 150);
+                                                }
                                           }
                                       }
                                      srsUpdateBadge();
@@ -2160,6 +2166,7 @@
                     const el = document.getElementById("mistakeToast");
                     if (!el) return;
                     el.textContent = msg;
+                    el.style.transition = "";
                     el.style.display = "block";
                     el.style.opacity = "1";
                     clearTimeout(el._timer);
@@ -3008,9 +3015,12 @@
                     }
                     const scheme = HEATMAP_SCHEMES[heatmapScheme] ||
                         HEATMAP_SCHEMES.ice;
-                    // Map idx 1..4 → t = (idx-1)/3
+                    // Map idx 1..4 → t = (idx-1)/3, interpolate through mid.
                     const t = (idx - 1) / 3;
-                    return pcLerpColor(scheme.light, scheme.dark, t);
+                    if (t <= 0.5) {
+                        return pcLerpColor(scheme.light, scheme.mid, t * 2);
+                    }
+                    return pcLerpColor(scheme.mid, scheme.dark, (t - 0.5) * 2);
                 }
 
                 // ── Tooltip helpers ──
@@ -3252,6 +3262,7 @@
                     const _scheme = HEATMAP_SCHEMES[heatmapScheme] ||
                         HEATMAP_SCHEMES.ice;
                     const pcLight = _scheme.light;
+                    const pcMid = _scheme.mid;
                     const pcDark = _scheme.dark;
                     // Empty cell is mode-aware: #EAEAEA in light mode, #222222 in dark mode
                     const pcEmpty = isDark ? "#222222" : "#EAEAEA";
@@ -3545,7 +3556,9 @@
                                 // ease 1.3 = darkest (hard), ease 4.0 = lightest (easy)
                                 const ease = card.easeFactor || 2.5;
                                 const t = Math.max(0, Math.min(1, (ease - 1.3) / (4.0 - 1.3)));
-                                cell.style.background = pcLerpColor(pcDark, pcLight, t);
+                                // 2-segment: dark → mid → light
+                                if (t <= 0.5) cell.style.background = pcLerpColor(pcDark, pcMid, t * 2);
+                                else cell.style.background = pcLerpColor(pcMid, pcLight, (t - 0.5) * 2);
                             } else {
                                 // "due" mode
                                 if (daysUntilDue < 0) {
@@ -3554,7 +3567,9 @@
                                 } else {
                                     // daysUntilDue >= 0: interpolate (0 = darkest, 30+ = lightest)
                                     const t = Math.max(0, Math.min(1, 1 - daysUntilDue / 30));
-                                    cell.style.background = pcLerpColor(pcLight, pcDark, t);
+                                    // 2-segment: light → mid → dark
+                                    if (t <= 0.5) cell.style.background = pcLerpColor(pcLight, pcMid, t * 2);
+                                    else cell.style.background = pcLerpColor(pcMid, pcDark, (t - 0.5) * 2);
                                 }
                             }
                         }
@@ -4082,6 +4097,38 @@
                              }
                         });
                     });
+                }
+
+                // Load a block's digits into the input (same path as clicking a
+                // checklist entry). Used to auto-advance to the next due block
+                // after a review completes.
+                function loadBlockIntoInput(bn) {
+                    const { start } = blockRange(bn);
+                    const _typedHere = blockProgress[bn] || 0;
+                    let target = snapToGroupStart(start);
+                    if (_typedHere > 0) {
+                        target = snapToGroupStart(start + _typedHere);
+                    }
+                    piInput.value = PI_DIGITS.substr(0, target);
+                    sequenceStartIndex = 0;
+                    skipProcessing = true;
+                    piInput.dispatchEvent(new Event("input"));
+                    piInput.focus();
+                }
+
+                // Find the next due block (lowest blockNum with dueDate <= today).
+                // Returns null if none.
+                function findNextDueBlock() {
+                    const today = srsToday();
+                    let best = null;
+                    for (const bnStr in studyBlockData) {
+                        const bn = parseInt(bnStr);
+                        const bd = studyBlockData[bn];
+                        if (bd.dueDate <= today) {
+                            if (best === null || bn < best) best = bn;
+                        }
+                    }
+                    return best;
                 }
 
                 // Lightweight goal-bar update used during typing — updates progress bar
@@ -7080,7 +7127,7 @@
                                     e.preventDefault();
                                     const mistakePos = currentTypingChunkPos;
                                     // Check if already marked as Hard
-                                    if (currentChunkLastRating === 4) {
+                                    if (currentChunkLastRating === 2) {
                                         const _mode2 = getModeForPos(mistakePos + 1);
                                         const _gSize2 = getGroupSizeForMode(_mode2);
                                         const digits2 = PI_DIGITS.slice(mistakePos, mistakePos + _gSize2);
@@ -7113,19 +7160,19 @@
                                       const _bnH = blockForPos(mistakePos);
                                       _blockRatings[_bnH] = _blockRatings[_bnH] || {};
                                       _blockRatings[_bnH][mistakePos] = 2;
-                                    mistakeUndoStack.push({
-                                        pos: mistakePos,
-                                        oldCard: _oldCardHard,
-                                        digits,
-                                        rating: 4,
-                                        countedAsReview: _countedAsReview,
-                                    });
+                                     mistakeUndoStack.push({
+                                         pos: mistakePos,
+                                         oldCard: _oldCardHard,
+                                         digits,
+                                         rating: 2,
+                                         countedAsReview: _countedAsReview,
+                                     });
                                     if (mistakeUndoStack.length > 20)
                                         mistakeUndoStack.shift();
-                                    currentChunkMistakePressed = true;
-                                      currentChunkLastRating = 4;
-                                      srsUpdateBadge();
-                                      const paoD = getPAOGroupDataByPos(
+                                     currentChunkMistakePressed = true;
+                                       currentChunkLastRating = 2;
+                                       srsUpdateBadge();
+                                       const paoD = getPAOGroupDataByPos(
                                         mistakePos,
                                         _mode,
                                     );
