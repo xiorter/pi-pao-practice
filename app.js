@@ -103,6 +103,7 @@
                 let goalBarUpdate = "digit"; // "digit" | "group" | "chunk"
                 let goalBarPosition = "top"; // "top" | "bottom"
                 let goalBarHidden = false;
+                let autoLoadReviews = true; // load next due block after a review completes
                 let heatmapViewYear = new Date().getFullYear();
                 let heatmapMode = "digits"; // always digits
                 let piCoverageMode = "due"; // "due" or "ease"
@@ -1306,6 +1307,7 @@
                         goalBarUpdate = s.goalBarUpdate || "digit";
                         goalBarPosition = s.goalBarPosition || "top";
                         goalBarHidden = s.goalBarHidden ?? false;
+                        autoLoadReviews = s.autoLoadReviews ?? true;
                         dayOffsetHours = s.dayOffsetHours ?? 4;
                         srsRawMode = s.srsRawMode ?? false;
                         isReviewMode = s.isReviewMode ?? false;
@@ -1430,6 +1432,8 @@
                         if (document.getElementById("goalBarHidden"))
                             document.getElementById("goalBarHidden").checked =
                                 goalBarHidden;
+                        const _alrEl = document.getElementById("autoLoadReviews");
+                        if (_alrEl) _alrEl.checked = autoLoadReviews;
                         const dslider =
                             document.getElementById("dayOffsetSlider");
                         if (dslider) {
@@ -1590,6 +1594,9 @@
                     goalBarHidden =
                         document.getElementById("goalBarHidden")?.checked ??
                         false;
+                    autoLoadReviews =
+                        document.getElementById("autoLoadReviews")?.checked ??
+                        true;
                     applyGoalBarSettings();
                     currentBackgroundColor =
                         document.getElementById("colorPicker").value;
@@ -1702,6 +1709,7 @@
                         goalBarUpdate,
                         goalBarPosition,
                         goalBarHidden,
+                        autoLoadReviews,
                         dayOffsetHours,
                         srsRawMode,
                         practiceIndex,
@@ -2123,17 +2131,19 @@
                                             showToast(`Block ${_bn + 1} completed — now due for review`);
                                            _justFinalized = true;
                                        }
-                                        if (studyBlockData[_bn] && !_justFinalized) {
-                                            const { start: _bS, end: _bE } = blockRange(_bn);
-                                            if (blockProgress[_bn] >= _bE - _bS + 1) {
-                                                rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
-                                                // Auto-advance to the next due block.
-                                                const _next = findNextDueBlock();
-                                                if (_next !== null) {
-                                                    setTimeout(() => loadBlockIntoInput(_next), 150);
-                                                }
-                                          }
-                                      }
+                                         if (studyBlockData[_bn] && !_justFinalized) {
+                                             const { start: _bS, end: _bE } = blockRange(_bn);
+                                             if (blockProgress[_bn] >= _bE - _bS + 1) {
+                                                 rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
+                                                 // Auto-advance to the next due block.
+                                                 if (autoLoadReviews) {
+                                                     const _next = findNextDueBlock();
+                                                     if (_next !== null) {
+                                                         setTimeout(() => loadBlockIntoInput(_next), 150);
+                                                     }
+                                                 }
+                                           }
+                                       }
                                      srsUpdateBadge();
                                      posTypedDates[_completedChunkStart] = srsToday();
                                  }
@@ -3114,6 +3124,7 @@
                     const _scheme = HEATMAP_SCHEMES[heatmapScheme] ||
                         HEATMAP_SCHEMES.ice;
                     const pastDark = _scheme.dark;
+                    const pastMid = _scheme.mid;
                     const pastLight = _scheme.light;
                     const futureDark = isDark ? "#313232" : "#D9D9D9";
                     const futureLight = isDark ? "#494B4B" : "#8E8E8E";
@@ -3159,8 +3170,14 @@
                             const digitCount = dailyStats[key] || 0;
 
                             // Smooth gradient for digits: 0 = empty, goal = lightest
+                            // (dark → mid → light, matching pi coverage).
                             const dFrac = digitCount === 0 ? 0 : Math.min(1, digitCount / dailyGoal);
-                            const dColor = digitCount === 0 ? emptyColor : lerpColor(pastDark, pastLight, dFrac);
+                            let dColor = emptyColor;
+                            if (digitCount > 0) {
+                                const dSeg = Math.min(1, dFrac * 1.1);
+                                if (dSeg <= 0.5) dColor = lerpColor(pastDark, pastMid, dSeg * 2);
+                                else dColor = lerpColor(pastMid, pastLight, (dSeg - 0.5) * 2);
+                            }
 
                             cell.style.background = dColor;
 
@@ -4437,7 +4454,9 @@
                     delete _blockRatings[bn];
                     syncBlockDueDates();
                     saveSettings();
-                    showToast(`Block ${bn + 1} review complete: ${severity >= SEV_THRESH_HARD ? "Again" : severity >= SEV_THRESH_GOOD ? "Hard" : severity > SEV_THRESH_EASY ? "Good" : "Easy"}`);
+                    if (!autoLoadReviews) {
+                        showToast(`Block ${bn + 1} review complete: ${severity >= SEV_THRESH_HARD ? "Again" : severity >= SEV_THRESH_GOOD ? "Hard" : severity > SEV_THRESH_EASY ? "Good" : "Easy"}`);
+                    }
                 }
 
                 function migrateStudyBlocks() {
