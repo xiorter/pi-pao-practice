@@ -2173,19 +2173,22 @@
                 }
 
                 function showToast(msg, ms = 2500) {
-                    const el = document.getElementById("mistakeToast");
-                    if (!el) return;
+                    const container = document.getElementById("toastContainer");
+                    if (!container) return;
+                    const el = document.createElement("div");
                     el.textContent = msg;
-                    el.style.transition = "";
-                    el.style.display = "block";
-                    el.style.opacity = "1";
-                    clearTimeout(el._timer);
+                    el.style.cssText =
+                        "background:rgba(0,0,0,0.75);color:#fff;padding:8px 18px;border-radius:8px;font-size:0.85rem;text-align:center;white-space:nowrap;";
+                    // Newest toast appears above older ones.
+                    container.prepend(el);
+                    while (container.children.length > 6) {
+                        container.lastChild.remove();
+                    }
                     el._timer = setTimeout(() => {
                         el.style.transition = "opacity 0.4s";
                         el.style.opacity = "0";
                         setTimeout(() => {
-                            el.style.display = "none";
-                            el.style.transition = "";
+                            if (el.parentNode) el.parentNode.removeChild(el);
                         }, 420);
                     }, ms);
                 }
@@ -4454,9 +4457,7 @@
                     delete _blockRatings[bn];
                     syncBlockDueDates();
                     saveSettings();
-                    if (!autoLoadReviews) {
-                        showToast(`Block ${bn + 1} review complete: ${severity >= SEV_THRESH_HARD ? "Again" : severity >= SEV_THRESH_GOOD ? "Hard" : severity > SEV_THRESH_EASY ? "Good" : "Easy"}`);
-                    }
+                    showToast(`Block ${bn + 1} review complete: ${severity >= SEV_THRESH_HARD ? "Again" : severity >= SEV_THRESH_GOOD ? "Hard" : severity > SEV_THRESH_EASY ? "Good" : "Easy"}`);
                 }
 
                 function migrateStudyBlocks() {

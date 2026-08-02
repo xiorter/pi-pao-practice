@@ -98,24 +98,20 @@
         <!-- Label shown above the bar when bar is at bottom -->
         <div id="goalBottomLabel"></div>
 
-        <!-- Toast notification for mistake added to review -->
+        <!-- Toast stack — each toast is a div appended by showToast -->
         <div
-            id="mistakeToast"
-            class="mistake-toast"
+            id="toastContainer"
             style="
-                display: none;
                 position: fixed;
                 bottom: 24px;
                 left: 50%;
                 transform: translateX(-50%);
-                background: rgba(0, 0, 0, 0.75);
-                color: #fff;
-                padding: 8px 18px;
-                border-radius: 8px;
-                font-size: 0.85rem;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 6px;
                 z-index: 99999;
                 pointer-events: none;
-                text-align: center;
             "
         ></div>
 
