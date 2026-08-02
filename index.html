@@ -111,7 +111,7 @@
                 background: rgba(0, 0, 0, 0.75);
                 color: #fff;
                 padding: 8px 18px;
-                border-radius: 20px;
+                border-radius: 8px;
                 font-size: 0.85rem;
                 z-index: 99999;
                 pointer-events: none;
@@ -311,8 +311,19 @@
                         <div class="setting-row">
                             <label
                                 ><input type="checkbox" id="autoMistake" />
-                                Auto-mistake: add mistyped chunks to review
-                                (Again)</label
+                                Automatically rate chunks 'Again' on mistyped
+                                digit</label
+                            >
+                        </div>
+                        <div class="setting-row">
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    id="autoLoadReviews"
+                                    checked
+                                />
+                                Auto-load next review after completing a
+                                block</label
                             >
                         </div>
                     </fieldset>
@@ -393,14 +404,6 @@
                             class="setting-row"
                             style="flex-direction: column; gap: 6px"
                         >
-                            <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;color:#555">
-                                <input type="checkbox" id="autoLoadReviews" checked />
-                                Auto-load next review after completing a block
-                            </label>
-                            <span style="font-size: 0.75rem; color: #888"
-                                >When on, completing a review immediately loads
-                                the next due block.</span
-                            >
                             <label style="font-size: 0.9rem; color: #555"
                                 >New day starts
                                 <span id="dayOffsetLabel">4</span> h after
