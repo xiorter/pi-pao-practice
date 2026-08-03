@@ -494,6 +494,7 @@
                 let dailyCreditedDate = ""; // tracks which day the credit state is for
                 let dailyGoalByDate = {}; // { "YYYY-MM-DD": goalDigits } — per-day goal for streak/heatmap
                 let _sessionBlock = -1; // block loaded via checklist click / auto-load (for valid-count gating)
+                let _progressCounted = {}; // { blockNum: { chunkStartPos: true } } — progress counted this pass
 
                 // ── Firebase Sync ──────────────────────────────────────
                 let _fbApp = null,
@@ -1483,6 +1484,7 @@
                             _sessionBlock = savedPiValue.length > 0
                                 ? blockForPos(snapToGroupStart(savedPiValue.length - 1))
                                 : -1;
+                            if (_sessionBlock >= 0) _progressCounted[_sessionBlock] = {};
                             skipProcessing = true;
                             piInput.value = savedPiValue;
                             checkPiDigits(piInput);
@@ -2096,11 +2098,15 @@
                                         // bar when reviewing due blocks. Also record a
                                         // neutral rating so the pi coverage outline
                                         // disappears (cell marked as completed today).
-                                        // Guard with posTypedDates so each chunk counts
-                                        // once per day, even when manually re-rated.
-                                         if (posTypedDates[_completedChunkStart] !== srsToday()) {
+                                        // Guard with _progressCounted (reset when the
+                                        // block session starts) so each chunk counts
+                                        // once per review pass, even if it was completed
+                                        // earlier today.
+                                         if (!_progressCounted[_bn] || !_progressCounted[_bn][_completedChunkStart]) {
                                              blockProgress[_bn] =
                                                  (blockProgress[_bn] || 0) + _gs_z;
+                                             _progressCounted[_bn] = _progressCounted[_bn] || {};
+                                             _progressCounted[_bn][_completedChunkStart] = true;
                                          }
                                         if (studyBlockData[_bn]) {
                                             _blockRatings[_bn] = _blockRatings[_bn] || {};
@@ -2144,9 +2150,9 @@
                                                  rescheduleBlockFromSeverity(_bn, studyBlockData[_bn]);
                                                  // Auto-advance to the next due block.
                                                  if (autoLoadReviews) {
-                                                     const _next = findNextDueBlock();
+                                                     const _next = findNextDueBlock(_bn);
                                                      if (_next !== null) {
-                                                         setTimeout(() => loadBlockIntoInput(_next), 150);
+                                                         setTimeout(() => loadBlockIntoInput(_next), 800);
                                                      }
                                                  }
                                            }
@@ -3447,6 +3453,7 @@
                                               studyBlockData[_thisBlock].interval = 1;
                                               blockProgress[_thisBlock] = 0;
                                               delete _blockRatings[_thisBlock];
+                                              _progressCounted[_thisBlock] = {};
                                               // Clear posTypedDates for the block so
                                               // retyped chunks count toward progress.
                                               const { start: _pdS, end: _pdE } = blockRange(_thisBlock);
@@ -3479,6 +3486,7 @@
                                               studyBlockData[_thisBlock].interval = 1;
                                               blockProgress[_thisBlock] = 0;
                                               delete _blockRatings[_thisBlock];
+                                              _progressCounted[_thisBlock] = {};
                                               const { start: _pdS, end: _pdE } = blockRange(_thisBlock);
                                               let _pdP = snapToGroupStart(_pdS);
                                               while (_pdP <= _pdE) {
@@ -3518,6 +3526,7 @@
                                               delete studyBlockData[_thisBlock];
                                              blockProgress[_thisBlock] = 0;
                                              delete _blockRatings[_thisBlock];
+                                             _progressCounted[_thisBlock] = {};
                                              saveSettings();
                                              renderPiCoverage();
                                              updateGoalBarOnly();
@@ -4022,7 +4031,7 @@
                                 _cachedGoal += end - start + 1;
                             }
                         }
-                        let maxBlock = 0;
+                        let maxBlock = -1;
                         for (const bnStr in studyBlockData) {
                             maxBlock = Math.max(maxBlock, parseInt(bnStr));
                         }
@@ -4053,7 +4062,7 @@
                     }
                     due.sort((a, b) => a - b);
                     // Find frontier block
-                    let max = 0;
+                    let max = -1;
                     for (const bnStr in studyBlockData)
                         max = Math.max(max, parseInt(bnStr));
                     const frontier = max + 1;
@@ -4100,6 +4109,7 @@
                             if (bn) {
                                 const n = parseInt(bn);
                                 _sessionBlock = n;
+                                _progressCounted[n] = {};
                                 // Jump to block start + today's progress
                                 const { start, end } = blockRange(n);
                                 const _typedHere = blockProgress[n] || 0;
@@ -4123,6 +4133,7 @@
                                  );
                                  const target = _maxP > 0 ? _maxP + _gsAdd : 0;
                                  _sessionBlock = target > 0 ? blockForPos(target - 1) : 0;
+                                 _progressCounted[_sessionBlock] = {};
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;
@@ -4140,6 +4151,7 @@
                 // after a review completes.
                 function loadBlockIntoInput(bn) {
                     _sessionBlock = bn;
+                    _progressCounted[bn] = {};
                     const { start } = blockRange(bn);
                     const _typedHere = blockProgress[bn] || 0;
                     let target = snapToGroupStart(start);
@@ -4153,15 +4165,16 @@
                     piInput.focus();
                 }
 
-                // Find the next due block (lowest blockNum with dueDate <= today).
-                // Returns null if none.
-                function findNextDueBlock() {
+                // Find the next due block strictly greater than fromBn (the block
+                // just completed), so auto-load continues down the checklist
+                // rather than always jumping to the top block. Returns null if none.
+                function findNextDueBlock(fromBn) {
                     const today = srsToday();
                     let best = null;
                     for (const bnStr in studyBlockData) {
                         const bn = parseInt(bnStr);
                         const bd = studyBlockData[bn];
-                        if (bd.dueDate <= today) {
+                        if (bd.dueDate <= today && bn > fromBn) {
                             if (best === null || bn < best) best = bn;
                         }
                     }
@@ -4429,7 +4442,7 @@
                     // session regardless of mid-block progress.
                     if (_sessionBlock === bn) return true;
                     // Active block? due today, or frontier block.
-                    let maxBlock = 0;
+                    let maxBlock = -1;
                     for (const k in studyBlockData) maxBlock = Math.max(maxBlock, parseInt(k));
                     const bd = studyBlockData[bn];
                     const isActive = (bd && bd.dueDate <= today) || bn === maxBlock + 1;
