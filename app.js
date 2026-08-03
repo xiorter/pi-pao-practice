@@ -492,6 +492,8 @@
                 let dailyCreditedMaxLength = 0;
                 let dailyCreditedAmount = 0; // how much of today's total came from the current seq start
                 let dailyCreditedDate = ""; // tracks which day the credit state is for
+                let dailyGoalByDate = {}; // { "YYYY-MM-DD": goalDigits } — per-day goal for streak/heatmap
+                let _sessionBlock = -1; // block loaded via checklist click / auto-load (for valid-count gating)
 
                 // ── Firebase Sync ──────────────────────────────────────
                 let _fbApp = null,
@@ -1317,6 +1319,7 @@
                         blockProgress = s.blockProgress || {};
                         _cachedGoal = s._cachedGoal || 0;
                         _cachedGoalDate = s._cachedGoalDate || "";
+                        dailyGoalByDate = s.dailyGoalByDate || {};
                         _blockRatings = s._blockRatings || {};
                         _blockProgressDate = s._blockProgressDate || "";
                         dailyCreditedDate = s.dailyCreditedDate || "";
@@ -1477,6 +1480,9 @@
                         if (volSlider)
                             volSlider.value = Math.round(volume * 10);
                         if (savedPiValue && piInput) {
+                            _sessionBlock = savedPiValue.length > 0
+                                ? blockForPos(snapToGroupStart(savedPiValue.length - 1))
+                                : -1;
                             skipProcessing = true;
                             piInput.value = savedPiValue;
                             checkPiDigits(piInput);
@@ -1756,6 +1762,7 @@
                         _blockRatings,
                         _blockProgressDate,
                         dailyCreditedDate,
+                        dailyGoalByDate,
                         darkMode,
                     };
                     _storage.setItem("piPaoSettings", JSON.stringify(s));
@@ -2061,7 +2068,7 @@
                                              break;
                                          }
                                      }
-                                     if (_allCorrect) {
+                                     if (_allCorrect && _isCountableChunk(_completedChunkStart)) {
                                       if (!srsData[_completedChunkStart]) {
                                           srsAddCard(_completedChunkStart);
                                       }
@@ -2927,7 +2934,12 @@
                             i < val.length;
                             i++
                         ) {
-                            if (val[i] === PI_DIGITS[sequenceStartIndex + i])
+                            const absPos = sequenceStartIndex + i;
+                            const chunkStart = snapToGroupStart(absPos);
+                            if (
+                                _isCountableChunk(chunkStart) &&
+                                val[i] === PI_DIGITS[absPos]
+                            )
                                 newCorrect++;
                         }
                          if (newCorrect > 0) {
@@ -2949,7 +2961,8 @@
                     let safety = 0;
                     while (safety++ < 3650) {
                         const count = dailyStats[dateKey] || 0;
-                        if (count >= dailyGoal) {
+                        const goalKey = dailyGoalByDate[dateKey] || dailyGoal;
+                        if (count >= goalKey) {
                             streak++;
                         } else if (!first) {
                             break;
@@ -2962,7 +2975,7 @@
 
                 function computeLongestStreak() {
                     const dates = Object.keys(dailyStats)
-                        .filter((k) => dailyStats[k] >= dailyGoal)
+                        .filter((k) => dailyStats[k] >= (dailyGoalByDate[k] || dailyGoal))
                         .sort();
                     let longest = 0,
                         current = 0,
@@ -3174,7 +3187,7 @@
 
                             // Smooth gradient for digits: 0 = empty, goal = lightest
                             // (dark → mid → light, matching pi coverage).
-                            const dFrac = digitCount === 0 ? 0 : Math.min(1, digitCount / dailyGoal);
+                            const dFrac = digitCount === 0 ? 0 : Math.min(1, digitCount / (dailyGoalByDate[key] || dailyGoal));
                             let dColor = emptyColor;
                             if (digitCount > 0) {
                                 const dSeg = Math.min(1, dFrac * 1.1);
@@ -4015,6 +4028,7 @@
                         }
                         const { start: _fS, end: _fE } = blockRange(maxBlock + 1);
                         _cachedGoal += _fE - _fS + 1;
+                        dailyGoalByDate[today] = _cachedGoal;
                     }
                     const progress = Math.min(dailyStats[today] || 0, _cachedGoal);
                     return { goal: _cachedGoal, progress };
@@ -4085,6 +4099,7 @@
                             const bn = item.dataset.block;
                             if (bn) {
                                 const n = parseInt(bn);
+                                _sessionBlock = n;
                                 // Jump to block start + today's progress
                                 const { start, end } = blockRange(n);
                                 const _typedHere = blockProgress[n] || 0;
@@ -4107,6 +4122,7 @@
                                      getModeForPos(Math.max(1, _maxP)),
                                  );
                                  const target = _maxP > 0 ? _maxP + _gsAdd : 0;
+                                 _sessionBlock = target > 0 ? blockForPos(target - 1) : 0;
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;
@@ -4123,6 +4139,7 @@
                 // checklist entry). Used to auto-advance to the next due block
                 // after a review completes.
                 function loadBlockIntoInput(bn) {
+                    _sessionBlock = bn;
                     const { start } = blockRange(bn);
                     const _typedHere = blockProgress[bn] || 0;
                     let target = snapToGroupStart(start);
@@ -4396,6 +4413,33 @@
                     const gNum = posToGroupNum(pos); // 0-indexed group number
                     if (gNum < 0) return 0;
                     return Math.floor(gNum / studyBlockSize);
+                }
+
+                // Whether a chunk completion should count toward daily goal /
+                // checklist progress / pi coverage. Counts only when the user is
+                // typing within the block loaded via a checklist click, OR they
+                // are at the first chunk of an active block (due today or
+                // frontier), OR it is a natural continuation (previous chunk in
+                // the same block already completed today). Random mid-block
+                // typing in inactive blocks never counts.
+                function _isCountableChunk(pos) {
+                    const today = srsToday();
+                    const bn = blockForPos(pos);
+                    // Loaded via checklist click — the whole block is a valid
+                    // session regardless of mid-block progress.
+                    if (_sessionBlock === bn) return true;
+                    // Active block? due today, or frontier block.
+                    let maxBlock = 0;
+                    for (const k in studyBlockData) maxBlock = Math.max(maxBlock, parseInt(k));
+                    const bd = studyBlockData[bn];
+                    const isActive = (bd && bd.dueDate <= today) || bn === maxBlock + 1;
+                    if (!isActive) return false;
+                    // First chunk of the block, or continuation of a chunk that
+                    // was already completed today in the same block.
+                    const gNum = posToGroupNum(pos);
+                    if (gNum % studyBlockSize === 0) return true;
+                    const prevPos = snapToGroupStart(pos - 1);
+                    return posTypedDates[prevPos] === today;
                 }
 
                 function blockRange(blockNum) {
