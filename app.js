@@ -4114,7 +4114,7 @@
                             : 15;
                         if (outputEl) {
                             const outputTop = outputEl.getBoundingClientRect().top;
-                            const newMax = Math.max(60, Math.floor(outputTop - topGap - cRect.top));
+                            const newMax = Math.max(60, Math.floor(outputTop - topGap - cRect.top + 24));
                             el.style.maxHeight = newMax + "px";
                         }
                     } catch (e) { /* layout measurement best-effort */ }
