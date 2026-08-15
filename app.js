@@ -4102,6 +4102,22 @@
                         ` <span class="checklist-counter">${_frTyped}/${_frDigits}</span></div></div>`;
                     }
                     el.innerHTML = html;
+                    // Constrain the checklist height so it doesn't cover the
+                    // digit output area. Bottom gap mirrors the top gap
+                    // (between top-bar buttons and the checklist top).
+                    try {
+                        const outputEl = document.getElementById("output-container");
+                        const topBarEl = document.querySelector(".top-bar");
+                        const cRect = el.getBoundingClientRect();
+                        const topGap = topBarEl
+                            ? cRect.top - topBarEl.getBoundingClientRect().bottom
+                            : 15;
+                        if (outputEl) {
+                            const outputTop = outputEl.getBoundingClientRect().top;
+                            const newMax = Math.max(60, Math.floor(outputTop - topGap - cRect.top));
+                            el.style.maxHeight = newMax + "px";
+                        }
+                    } catch (e) { /* layout measurement best-effort */ }
                     // Wire clicks
                     el.querySelectorAll(".checklist-entry").forEach((item) => {
                         item.addEventListener("click", () => {
