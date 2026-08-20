@@ -4513,15 +4513,15 @@
                     const severity = Math.min(1, totalPoints / (2 * chunkCount));
                     const isFirst = bd.reviews === 0;
                     if (severity >= SEV_THRESH_HARD) {
-                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * 0.5));
+                        bd.interval = isFirst ? 1 : 1;
                         bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.2);
                     } else if (severity >= SEV_THRESH_GOOD) {
-                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * 1.5));
-                        bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.1);
+                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * 1.2));
+                        bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.15);
                     } else if (severity > SEV_THRESH_EASY) {
-                        bd.interval = isFirst ? 2 : Math.max(1, Math.round(bd.interval * bd.easeFactor));
+                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * bd.easeFactor));
                     } else {
-                        bd.interval = isFirst ? 3 : Math.max(1, Math.round(bd.interval * bd.easeFactor * 1.3));
+                        bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * bd.easeFactor * 1.3));
                         bd.easeFactor = Math.min(4.0, bd.easeFactor + 0.15);
                     }
                     bd.dueDate = isFirst && severity >= SEV_THRESH_HARD ? srsToday() : srsDaysFromNow(bd.interval);
