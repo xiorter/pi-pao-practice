@@ -4053,6 +4053,43 @@
                     }
                     const el = document.getElementById("blockChecklist");
                     if (!el) return;
+
+                    // Self-heal a stuck frontier block. A block can end up
+                    // fully typed (every chunk has an srsData card) without
+                    // ever being finalised into studyBlockData — e.g. if the
+                    // app was closed/refreshed right as the last chunk was
+                    // typed. When that happens the block silently vanishes
+                    // from the checklist: it's not in studyBlockData so it
+                    // never appears in the "due" list below, and
+                    // isBlockComplete() reports the frontier as already done
+                    // so the "Add new chunks" entry hides too, leaving an
+                    // empty checklist. Detect that and finalise the block now
+                    // so it reappears as a normal due review.
+                    let _healMax = -1;
+                    for (const bnStr in studyBlockData)
+                        _healMax = Math.max(_healMax, parseInt(bnStr));
+                    let _healFrontier = _healMax + 1;
+                    let _healed = false;
+                    while (isBlockComplete(_healFrontier) && !studyBlockData[_healFrontier]) {
+                        const { start: _hS, end: _hE } = blockRange(_healFrontier);
+                        studyBlockData[_healFrontier] = {
+                            start: _hS,
+                            end: _hE,
+                            dueDate: srsToday(),
+                            interval: 1,
+                            easeFactor: 2.5,
+                            reviews: 0,
+                            lapses: 0,
+                        };
+                        blockProgress[_healFrontier] = 0;
+                        _healed = true;
+                        _healFrontier++;
+                    }
+                    if (_healed) {
+                        syncBlockDueDates();
+                        saveSettings();
+                    }
+
                     // Collect due blocks
                     const due = [];
                     for (const bnStr in studyBlockData) {
@@ -4067,7 +4104,6 @@
                         max = Math.max(max, parseInt(bnStr));
                     const frontier = max + 1;
                     const { start: frStart } = blockRange(frontier);
-                    el.style.display = "block";
                     let html = "";
                     for (const bn of due) {
                         const { start, end } = blockRange(bn);
@@ -4102,6 +4138,15 @@
                         ` <span class="checklist-counter">${_frTyped}/${_frDigits}</span></div></div>`;
                     }
                     el.innerHTML = html;
+                    // Hide the checklist entirely when there's nothing to
+                    // show (no due blocks, and the frontier "Add new
+                    // chunks" entry is complete/absent), rather than
+                    // leaving an empty box on screen.
+                    if (!html) {
+                        el.style.display = "none";
+                        return;
+                    }
+                    el.style.display = "block";
                     // Constrain the checklist height so it doesn't cover the
                     // digit output area. Bottom gap mirrors the top gap
                     // (between top-bar buttons and the checklist top).
