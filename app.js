@@ -495,6 +495,15 @@
                 let dailyGoalByDate = {}; // { "YYYY-MM-DD": goalDigits } — per-day goal for streak/heatmap
                 let _sessionBlock = -1; // block loaded via checklist click / auto-load (for valid-count gating)
                 let _progressCounted = {}; // { blockNum: { chunkStartPos: true } } — progress counted this pass
+                // Furthest chunk-start position ever GENUINELY completed (typed
+                // in full and correct), updated at the same guarded point as
+                // blockProgress/posTypedDates. Unlike Object.keys(srsData), this
+                // is never polluted by a manual Shift+1-4 rating on a chunk
+                // that's only half-typed, and (unlike posTypedDates) it's never
+                // cleared on block finalization — so it's safe to use as the
+                // "how far has the user actually typed" high-water mark for
+                // navigation/limit checks. Monotonically increasing.
+                let maxTypedChunkPos = -1;
 
                 // ── Firebase Sync ──────────────────────────────────────
                 let _fbApp = null,
@@ -1261,6 +1270,7 @@
                         dailyGoal = s.dailyGoal || 400;
                         dailyStats = s.dailyStats || {};
                         posTypedDates = s.posTypedDates || {};
+                        maxTypedChunkPos = s.maxTypedChunkPos ?? -1;
                         personList = s.personList || {};
                         actionList = s.actionList || {};
                         objectList = s.objectList || {};
@@ -1270,6 +1280,16 @@
                         excelColumnConfig =
                             s.excelColumnConfig || excelColumnConfig;
                         srsData = s.srsData || {};
+                        // Backfill for saves from before maxTypedChunkPos
+                        // existed: fall back to the old (imperfect) proxy
+                        // once, so existing progress isn't reset to 0.
+                        if (maxTypedChunkPos < 0) {
+                            const _bfPositions = Object.keys(srsData).map(Number);
+                            maxTypedChunkPos =
+                                _bfPositions.length > 0
+                                    ? Math.max(..._bfPositions)
+                                    : -1;
+                        }
                         srsNewSeenToday = s.srsNewSeenToday || 0;
                         const _sv = (id, val) => {
                             const el = document.getElementById(id);
@@ -1754,6 +1774,7 @@
                         dailyGoal,
                         dailyStats,
                         posTypedDates,
+                        maxTypedChunkPos,
                         isReviewMode,
                         studyBlockSize,
                         studyBlockData,
@@ -2025,18 +2046,19 @@
                                 currentChunkLastRating = 0;
                             }
                             if (_atBoundary) {
-                                // Compute the furthest card currently in the
-                                // SRS deck so we can warn the user when they
-                                // type a chunk past their review range.
-                                const _srsPositions = Object.keys(
-                                    srsData,
-                                ).map(Number);
-                                const _maxCardPos =
-                                    _srsPositions.length > 0
-                                        ? Math.max(..._srsPositions)
-                                        : 0;
+                                // Compute the furthest chunk genuinely typed
+                                // in full so far, so we can warn the user
+                                // when they type a chunk past their review
+                                // range. Uses maxTypedChunkPos rather than
+                                // Object.keys(srsData) — the latter also
+                                // includes chunks that only got a manual
+                                // Shift+1-4 rating while half-typed, which
+                                // would let this guard (and the "Add new
+                                // chunks" checklist jump) skip past chunks
+                                // the user never actually finished.
+                                const _maxCardPos = maxTypedChunkPos;
                                 if (
-                                    _srsPositions.length > 0 &&
+                                    _maxCardPos >= 0 &&
                                     _completedChunkStart >
                                         _maxCardPos +
                                             getGroupSizeForMode(
@@ -2107,6 +2129,9 @@
                                                  (blockProgress[_bn] || 0) + _gs_z;
                                              _progressCounted[_bn] = _progressCounted[_bn] || {};
                                              _progressCounted[_bn][_completedChunkStart] = true;
+                                             if (_completedChunkStart > maxTypedChunkPos) {
+                                                 maxTypedChunkPos = _completedChunkStart;
+                                             }
                                          }
                                         if (studyBlockData[_bn]) {
                                             _blockRatings[_bn] = _blockRatings[_bn] || {};
@@ -4186,13 +4211,19 @@
                                  );
                                  piInput.focus();
                              } else {
-                                 // Add new: jump to current frontier position
-                                 const _srsPosA = Object.keys(srsData).map(Number);
-                                 const _maxP = _srsPosA.length > 0 ? Math.max(..._srsPosA) : 0;
+                                 // Add new: jump to current frontier position.
+                                 // Uses maxTypedChunkPos (furthest chunk
+                                 // genuinely typed in full), not
+                                 // Object.keys(srsData) — the latter can
+                                 // include a chunk that only got a manual
+                                 // Shift+1-4 rating while still half-typed,
+                                 // which would jump past that unfinished
+                                 // chunk instead of resuming it.
+                                 const _maxP = Math.max(0, maxTypedChunkPos);
                                  const _gsAdd = getGroupSizeForMode(
                                      getModeForPos(Math.max(1, _maxP)),
                                  );
-                                 const target = _maxP > 0 ? _maxP + _gsAdd : 0;
+                                 const target = maxTypedChunkPos >= 0 ? _maxP + _gsAdd : 0;
                                  _sessionBlock = target > 0 ? blockForPos(target - 1) : 0;
                                  _progressCounted[_sessionBlock] = {};
                                  piInput.value = PI_DIGITS.substr(0, target);
