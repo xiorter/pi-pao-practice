@@ -1372,6 +1372,9 @@
                         _cachedGoal = s._cachedGoal || 0;
                         _cachedGoalDate = s._cachedGoalDate || "";
                         _cachedGoalSig = s._cachedGoalSig || "";
+                        _goalDueUnion = s._goalDueUnion || {};
+                        _goalFrontierForToday =
+                            s._goalFrontierForToday ?? -1;
                         dailyGoalByDate = s.dailyGoalByDate || {};
                         _blockRatings = s._blockRatings || {};
                         _blockProgressDate = s._blockProgressDate || "";
@@ -1815,6 +1818,8 @@
                         _cachedGoal,
                         _cachedGoalDate,
                         _cachedGoalSig,
+                        _goalDueUnion,
+                        _goalFrontierForToday,
                         _blockRatings,
                         _blockProgressDate,
                         dailyCreditedDate,
@@ -4105,52 +4110,76 @@
                 // (due blocks + new frontier) and how many they've typed
                 // within those blocks today.
                 //
-                // The expensive part of this (blockRange, which walks
-                // chunk-by-chunk via chunkStartPosition) is cached rather
-                // than run on every call/keystroke. But caching only by
-                // *date* meant the total got frozen at whatever it was the
-                // first time it was computed each day — so if a block was
-                // still mid-typing at that point (e.g. today's "Add new
-                // chunks" frontier) and only got finalized into
-                // studyBlockData later in the session (self-heal, finishing
-                // the block, or a manual reschedule), the goal never grew
-                // to include it, and could show 100% complete while chunks
-                // still needed to be added. Instead, cache by a cheap
-                // signature of *which* blocks are due today plus the
-                // current frontier block number — computing that signature
-                // is just a scan of studyBlockData with no blockRange calls,
-                // so it's safe every call, and the expensive sum only reruns
-                // when the signature actually changes.
+                // The goal must never SHRINK once the day has started — it
+                // should only ever grow (when new content becomes part of
+                // today, e.g. self-heal finalizing a stuck block). A block
+                // that's due today and gets completed has its due date
+                // pushed into the future by rescheduleBlockFromSeverity, so
+                // "currently due" is NOT a safe basis for the total: computing
+                // it live from "currently due" made the goal drop the moment
+                // a due block was finished (it's no longer due, so it fell
+                // out of the sum), which could suddenly show e.g. 200/400
+                // jumping to 200/200 mid-review. Instead we accumulate a
+                // monotonically-growing set of "blocks that have been due at
+                // some point today" (_goalDueUnion) plus a single frontier
+                // block picked once at the start of the day
+                // (_goalFrontierForToday, so finishing "Add new chunks"
+                // doesn't roll the goal onto tomorrow's frontier too). Both
+                // persist and reset only on a real date change.
                 let _cachedGoal = 0;
                 let _cachedGoalDate = "";
                 let _cachedGoalSig = "";
+                let _goalDueUnion = {};
+                let _goalFrontierForToday = -1;
                 function computeActiveGoal() {
                     const today = srsToday();
-                    let maxBlock = -1;
-                    const dueBns = [];
+                    const isNewDay = _cachedGoalDate !== today;
+                    if (isNewDay) {
+                        _cachedGoalDate = today;
+                        _goalDueUnion = {};
+                        _goalFrontierForToday = -1;
+                    }
+                    if (_goalFrontierForToday < 0) {
+                        // Either a genuinely new day, or a save from before
+                        // this field existed being loaded mid-day (in which
+                        // case _goalDueUnion is left as-is rather than wiped,
+                        // since it may already hold today's due blocks
+                        // accumulated under the old logic).
+                        let _startMaxBlock = -1;
+                        for (const bnStr in studyBlockData)
+                            _startMaxBlock = Math.max(_startMaxBlock, parseInt(bnStr));
+                        _goalFrontierForToday = _startMaxBlock + 1;
+                    }
+                    // Fold in any block that's due right now — this only
+                    // ever adds block numbers, never removes them, so a
+                    // block completed (and thus rescheduled forward) mid-
+                    // session stays counted for the rest of today.
                     for (const bnStr in studyBlockData) {
                         const bn = parseInt(bnStr);
-                        if (bn > maxBlock) maxBlock = bn;
-                        if (studyBlockData[bn].dueDate <= today) dueBns.push(bn);
+                        if (studyBlockData[bn].dueDate <= today) {
+                            _goalDueUnion[bn] = true;
+                        }
                     }
-                    dueBns.sort((a, b) => a - b);
-                    const sig = maxBlock + "|" + dueBns.join(",");
-                    if (_cachedGoalDate !== today || _cachedGoalSig !== sig) {
-                        _cachedGoalDate = today;
+                    const dueBns = Object.keys(_goalDueUnion)
+                        .map(Number)
+                        .sort((a, b) => a - b);
+                    const sig = dueBns.join(",") + "|" + _goalFrontierForToday;
+                    if (_cachedGoalSig !== sig) {
                         _cachedGoalSig = sig;
+                        const counted = new Set(dueBns);
+                        counted.add(_goalFrontierForToday);
                         let total = 0;
-                        for (const bn of dueBns) {
+                        for (const bn of counted) {
                             const { start, end } = blockRange(bn);
                             total += end - start + 1;
                         }
-                        const { start: _fS, end: _fE } = blockRange(maxBlock + 1);
-                        total += _fE - _fS + 1;
                         _cachedGoal = total;
                         dailyGoalByDate[today] = _cachedGoal;
                     }
                     const progress = Math.min(dailyStats[today] || 0, _cachedGoal);
                     return { goal: _cachedGoal, progress };
                 }
+
 
                 function renderChecklist() {
                     const today = srsToday();
