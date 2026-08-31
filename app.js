@@ -491,6 +491,7 @@
                 let dailyCreditedSeqStart = -1;
                 let dailyCreditedMaxLength = 0;
                 let dailyCreditedAmount = 0; // how much of today's total came from the current seq start
+                let dailyCreditedFlags = []; // dailyCreditedFlags[i] = was position (dailyCreditedSeqStart + i) counted in dailyStats?
                 let dailyCreditedDate = ""; // tracks which day the credit state is for
                 let dailyGoalByDate = {}; // { "YYYY-MM-DD": goalDigits } — per-day goal for streak/heatmap
                 let _sessionBlock = -1; // block loaded via checklist click / auto-load (for valid-count gating)
@@ -640,6 +641,36 @@
                             }
                         }
                         merged.posTypedDates = mergedPTD;
+
+                        // studyBlockData: same idea as srsData above. This was
+                        // previously left out of the smart merge, so it fell
+                        // under the blanket "remote wins" rule — meaning any
+                        // pull (including the automatic one on page load if
+                        // Cloud Sync is connected) could silently overwrite a
+                        // block's just-finished review (due date pushed
+                        // forward, reviews incremented) with an older cloud
+                        // snapshot if that review hadn't been pushed yet
+                        // (pushes are debounced 2s after saveSettings). For
+                        // each block, keep whichever side has more reviews
+                        // recorded (i.e. is further along); on a tie, keep
+                        // the later due date (the more recently rescheduled
+                        // one).
+                        const localSBD = local.studyBlockData || {};
+                        const remoteSBD = remote.studyBlockData || {};
+                        const mergedSBD = { ...localSBD };
+                        for (const [bn, rb] of Object.entries(remoteSBD)) {
+                            const lb = localSBD[bn];
+                            if (!lb) {
+                                mergedSBD[bn] = rb;
+                            } else if (
+                                (rb.reviews || 0) > (lb.reviews || 0) ||
+                                ((rb.reviews || 0) === (lb.reviews || 0) &&
+                                    rb.dueDate > lb.dueDate)
+                            ) {
+                                mergedSBD[bn] = rb;
+                            }
+                        }
+                        merged.studyBlockData = mergedSBD;
 
                         // If remote has ankiImages use those; otherwise keep local
                         if (
@@ -1340,6 +1371,7 @@
                         blockProgress = s.blockProgress || {};
                         _cachedGoal = s._cachedGoal || 0;
                         _cachedGoalDate = s._cachedGoalDate || "";
+                        _cachedGoalSig = s._cachedGoalSig || "";
                         dailyGoalByDate = s.dailyGoalByDate || {};
                         _blockRatings = s._blockRatings || {};
                         _blockProgressDate = s._blockProgressDate || "";
@@ -1782,6 +1814,7 @@
                         blockProgress,
                         _cachedGoal,
                         _cachedGoalDate,
+                        _cachedGoalSig,
                         _blockRatings,
                         _blockProgressDate,
                         dailyCreditedDate,
@@ -1859,6 +1892,7 @@
                         // credited as new typing on the next keystroke.
                         dailyCreditedSeqStart = sequenceStartIndex;
                         dailyCreditedMaxLength = val.length;
+                        dailyCreditedFlags = [];
                         dailyCreditedDate = srsToday();
                         return;
                     }
@@ -2917,11 +2951,20 @@
                     return `${y}-${m}-${dd}`;
                 }
 
-                // Credit newly-typed CORRECT digits to today's total, exactly once each.
-                // dailyCreditedMaxLength is a high-water mark that only ever grows for a
-                // given sequenceStartIndex: it remembers how far the user has *ever* typed
-                // correctly in this sequence today, so backspacing and retyping the same
-                // digits does not re-credit them. Only digits beyond that max are new.
+                // Credit newly-typed CORRECT digits to today's total, exactly once each,
+                // and revoke credit for digits that get backspaced away before being
+                // retyped — so the daily total (and the goal bar it drives) always
+                // reflects what's actually present in the input right now, not the
+                // highest point ever reached in this sequence today.
+                //
+                // dailyCreditedFlags[i] records whether position (dailyCreditedSeqStart + i)
+                // is currently counted in dailyStats. On backspace we sum the flags for the
+                // removed tail and subtract exactly that many from today's total; on typing
+                // forward we evaluate only the new positions, same as before. This keeps
+                // retyping the same correct digits from double-crediting (the position is
+                // simply re-flagged the same way) while making a backspace-in-progress show
+                // up immediately rather than leaving stale credit for digits that aren't
+                // typed yet.
                 //
                 // A short typed prefix (e.g. a single "5") is ambiguous and may match the
                 // FIRST place that digit happens to occur in pi, getting opportunistically
@@ -2937,6 +2980,7 @@
                         dailyCreditedSeqStart = sequenceStartIndex;
                         dailyCreditedMaxLength = val.length; // skip crediting existing digits
                         dailyCreditedAmount = 0;
+                        dailyCreditedFlags = [];
                         dailyCreditedDate = today;
                         // Reset today's count to 0 so the display doesn't
                         // continue showing yesterday's number. Refresh
@@ -2957,6 +3001,27 @@
                         dailyCreditedSeqStart = sequenceStartIndex;
                         dailyCreditedMaxLength = 0;
                         dailyCreditedAmount = 0;
+                        dailyCreditedFlags = [];
+                    }
+                    // Backspaced within the current sequence: revoke credit for
+                    // exactly the positions that were counted and are now gone.
+                    if (val.length < dailyCreditedMaxLength) {
+                        let removed = 0;
+                        for (let i = val.length; i < dailyCreditedMaxLength; i++) {
+                            if (dailyCreditedFlags[i]) removed++;
+                        }
+                        if (removed > 0) {
+                            dailyStats[today] = Math.max(
+                                0,
+                                (dailyStats[today] || 0) - removed,
+                            );
+                            dailyCreditedAmount = Math.max(
+                                0,
+                                dailyCreditedAmount - removed,
+                            );
+                        }
+                        dailyCreditedFlags.length = val.length;
+                        dailyCreditedMaxLength = val.length;
                     }
                     if (val.length > dailyCreditedMaxLength) {
                         let newCorrect = 0;
@@ -2967,23 +3032,21 @@
                         ) {
                             const absPos = sequenceStartIndex + i;
                             const chunkStart = snapToGroupStart(absPos);
-                            if (
+                            const _ok =
                                 _isCountableChunk(chunkStart) &&
-                                val[i] === PI_DIGITS[absPos]
-                            )
-                                newCorrect++;
+                                val[i] === PI_DIGITS[absPos];
+                            dailyCreditedFlags[i] = _ok;
+                            if (_ok) newCorrect++;
                         }
                          if (newCorrect > 0) {
                              dailyStats[today] =
                                  (dailyStats[today] || 0) + newCorrect;
                              dailyCreditedAmount += newCorrect;
-                             dailyCreditedMaxLength = val.length;
                          }
+                         dailyCreditedMaxLength = val.length;
                      }
-                    // val.length <= dailyCreditedMaxLength (i.e. backspaced within already-
-                    // credited territory): nothing to do. The max stays put so retyping the
-                    // same ground doesn't get credited a second time.
                 }
+
 
                 function computeCurrentStreak() {
                     let streak = 0;
@@ -4041,27 +4104,48 @@
                 // Returns the total digits the user should type today
                 // (due blocks + new frontier) and how many they've typed
                 // within those blocks today.
+                //
+                // The expensive part of this (blockRange, which walks
+                // chunk-by-chunk via chunkStartPosition) is cached rather
+                // than run on every call/keystroke. But caching only by
+                // *date* meant the total got frozen at whatever it was the
+                // first time it was computed each day — so if a block was
+                // still mid-typing at that point (e.g. today's "Add new
+                // chunks" frontier) and only got finalized into
+                // studyBlockData later in the session (self-heal, finishing
+                // the block, or a manual reschedule), the goal never grew
+                // to include it, and could show 100% complete while chunks
+                // still needed to be added. Instead, cache by a cheap
+                // signature of *which* blocks are due today plus the
+                // current frontier block number — computing that signature
+                // is just a scan of studyBlockData with no blockRange calls,
+                // so it's safe every call, and the expensive sum only reruns
+                // when the signature actually changes.
                 let _cachedGoal = 0;
                 let _cachedGoalDate = "";
+                let _cachedGoalSig = "";
                 function computeActiveGoal() {
                     const today = srsToday();
-                    if (_cachedGoalDate !== today) {
+                    let maxBlock = -1;
+                    const dueBns = [];
+                    for (const bnStr in studyBlockData) {
+                        const bn = parseInt(bnStr);
+                        if (bn > maxBlock) maxBlock = bn;
+                        if (studyBlockData[bn].dueDate <= today) dueBns.push(bn);
+                    }
+                    dueBns.sort((a, b) => a - b);
+                    const sig = maxBlock + "|" + dueBns.join(",");
+                    if (_cachedGoalDate !== today || _cachedGoalSig !== sig) {
                         _cachedGoalDate = today;
-                        _cachedGoal = 0;
-                        for (const bnStr in studyBlockData) {
-                            const bn = parseInt(bnStr);
-                            const bd = studyBlockData[bn];
-                            if (bd.dueDate <= today) {
-                                const { start, end } = blockRange(bn);
-                                _cachedGoal += end - start + 1;
-                            }
-                        }
-                        let maxBlock = -1;
-                        for (const bnStr in studyBlockData) {
-                            maxBlock = Math.max(maxBlock, parseInt(bnStr));
+                        _cachedGoalSig = sig;
+                        let total = 0;
+                        for (const bn of dueBns) {
+                            const { start, end } = blockRange(bn);
+                            total += end - start + 1;
                         }
                         const { start: _fS, end: _fE } = blockRange(maxBlock + 1);
-                        _cachedGoal += _fE - _fS + 1;
+                        total += _fE - _fS + 1;
+                        _cachedGoal = total;
                         dailyGoalByDate[today] = _cachedGoal;
                     }
                     const progress = Math.min(dailyStats[today] || 0, _cachedGoal);
