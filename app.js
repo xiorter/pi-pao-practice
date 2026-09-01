@@ -4324,21 +4324,26 @@
                                  );
                                  piInput.focus();
                              } else {
-                                 // Add new: jump to current frontier position.
-                                 // Uses maxTypedChunkPos (furthest chunk
-                                 // genuinely typed in full), not
-                                 // Object.keys(srsData) — the latter can
-                                 // include a chunk that only got a manual
-                                 // Shift+1-4 rating while still half-typed,
-                                 // which would jump past that unfinished
-                                 // chunk instead of resuming it.
-                                 const _maxP = Math.max(0, maxTypedChunkPos);
-                                 const _gsAdd = getGroupSizeForMode(
-                                     getModeForPos(Math.max(1, _maxP)),
-                                 );
-                                 const target = maxTypedChunkPos >= 0 ? _maxP + _gsAdd : 0;
-                                 _sessionBlock = target > 0 ? blockForPos(target - 1) : 0;
-                                 _progressCounted[_sessionBlock] = {};
+                                 // Add new: jump to frontier start + today's
+                                 // progress into it — same pattern as the due-
+                                 // block branch above (blockRange().start +
+                                 // blockProgress[bn]), and for the same
+                                 // reason: blockProgress only ever advances on
+                                 // a full, correct chunk completion, so a
+                                 // chunk with only a digit or two typed is
+                                 // never included in the target. This is
+                                 // scoped to the frontier block specifically,
+                                 // unlike the old maxTypedChunkPos high-water
+                                 // mark, which could get permanently stuck
+                                 // too high from its one-time migration
+                                 // backfill (derived from Object.keys(srsData),
+                                 // the same signal that could already be
+                                 // polluted by an old manual mid-chunk rating).
+                                 const { start: _frStart } = blockRange(frontier);
+                                 const _frTypedHere = blockProgress[frontier] || 0;
+                                 const target = snapToGroupStart(_frStart + _frTypedHere);
+                                 _sessionBlock = frontier;
+                                 _progressCounted[frontier] = {};
                                  piInput.value = PI_DIGITS.substr(0, target);
                                  sequenceStartIndex = 0;
                                  skipProcessing = true;
