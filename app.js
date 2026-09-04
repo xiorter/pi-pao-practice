@@ -2118,53 +2118,49 @@
                                 currentChunkLastRating = 0;
                             }
                             if (_atBoundary) {
-                                // Compute the furthest chunk genuinely typed
-                                // in full so far, so we can warn the user
-                                // when they type a chunk past their review
-                                // range. Uses maxTypedChunkPos rather than
-                                // Object.keys(srsData) — the latter also
-                                // includes chunks that only got a manual
-                                // Shift+1-4 rating while half-typed, which
-                                // would let this guard (and the "Add new
-                                // chunks" checklist jump) skip past chunks
-                                // the user never actually finished.
-                                const _maxCardPos = maxTypedChunkPos;
-                                if (
-                                    _maxCardPos >= 0 &&
-                                    _completedChunkStart >
-                                        _maxCardPos +
-                                            getGroupSizeForMode(
-                                                getModeForPos(
-                                                    _completedChunkStart + 1,
-                                                ),
-                                            )
-                                ) {
-                                    // Past the review range — don't add to deck.
-                                    // Toast every time (no gating) so the user
-                                    // always knows why nothing was added.
+                                // Within range. Only process if every
+                                // digit in this chunk is correct.
+                                const _bn = blockForPos(
+                                    _completedChunkStart,
+                                );
+                                const _gs_z = getGroupSizeForMode(
+                                    getModeForPos(
+                                        _completedChunkStart + 1,
+                                    ),
+                                );
+                                let _allCorrect = true;
+                                const _chunkOffset = _completedChunkStart - sequenceStartIndex;
+                                for (let _ci = 0; _ci < _gs_z; _ci++) {
+                                    if (val[_chunkOffset + _ci] !== PI_DIGITS[_completedChunkStart + _ci]) {
+                                        _allCorrect = false;
+                                        break;
+                                    }
+                                }
+                                if (_allCorrect && !_isCountableChunk(_completedChunkStart)) {
+                                    // Correctly typed, but this chunk isn't
+                                    // part of any block that's currently
+                                    // active — not due today, not the
+                                    // current frontier, and not a natural
+                                    // continuation of a chunk typed earlier
+                                    // today. Typing further ahead than your
+                                    // active range doesn't add progress.
+                                    //
+                                    // This used to be gated on a separate
+                                    // maxTypedChunkPos high-water mark, which
+                                    // could only ever advance from inside
+                                    // this very branch — so if it ever fell
+                                    // behind the user's true progress for any
+                                    // reason (a bad one-time migration
+                                    // backfill, a block finalized via a path
+                                    // that didn't touch it, etc.) it could
+                                    // never recover, permanently blocking
+                                    // further typing. _isCountableChunk reads
+                                    // live block state instead, so it can't
+                                    // get stuck this way.
                                     showToast(
-                                        `Chunk at #${_completedChunkStart + 1} not added. Max is at #${_maxCardPos + 1}`,
+                                        `Chunk at #${_completedChunkStart + 1} not added — outside your active review range.`,
                                     );
-                                 } else {
-                                     // Within range. Only process if every
-                                     // digit in this chunk is correct.
-                                     const _bn = blockForPos(
-                                         _completedChunkStart,
-                                     );
-                                     const _gs_z = getGroupSizeForMode(
-                                         getModeForPos(
-                                             _completedChunkStart + 1,
-                                         ),
-                                     );
-                                     let _allCorrect = true;
-                                     const _chunkOffset = _completedChunkStart - sequenceStartIndex;
-                                     for (let _ci = 0; _ci < _gs_z; _ci++) {
-                                         if (val[_chunkOffset + _ci] !== PI_DIGITS[_completedChunkStart + _ci]) {
-                                             _allCorrect = false;
-                                             break;
-                                         }
-                                     }
-                                     if (_allCorrect && _isCountableChunk(_completedChunkStart)) {
+                                } else if (_allCorrect) {
                                       if (!srsData[_completedChunkStart]) {
                                           srsAddCard(_completedChunkStart);
                                       }
@@ -2257,7 +2253,6 @@
                                      srsUpdateBadge();
                                      posTypedDates[_completedChunkStart] = srsToday();
                                  }
-                             }
                              }
                              } else {
                             currentTypingChunkPos = -1;
