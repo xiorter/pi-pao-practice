@@ -545,10 +545,35 @@
                     try {
                         const data = _fbGetSyncableData();
                         data._syncedAt = Date.now();
+                        // Store the whole payload as a single JSON string
+                        // field rather than writing it as a raw nested
+                        // object. Firestore auto-indexes every key of every
+                        // nested map by default — srsData alone has one
+                        // entry per chunk ever typed (thousands at typical
+                        // progress), plus studyBlockData, dailyStats,
+                        // posTypedDates, etc. — so writing this object
+                        // directly eventually exceeds Firestore's per-
+                        // document index-entry limit ("too many index
+                        // entries for entity"). A string field has no such
+                        // problem regardless of how much data is inside it.
+                        const _blobStr = JSON.stringify(data);
+                        const _blobBytes = new Blob([_blobStr]).size;
+                        if (_blobBytes >= 950000) {
+                            // ~950KB safe margin under Firestore's 1MB
+                            // per-document limit (same margin used for the
+                            // background image below).
+                            _fbStatus(
+                                "Push failed: data too large (" +
+                                    Math.round(_blobBytes / 1024) +
+                                    "KB, limit ~950KB)",
+                                "#e05252",
+                            );
+                            return;
+                        }
                         await _fbDb
                             .collection("piPao")
                             .doc(_fbSyncCode)
-                            .set(data);
+                            .set({ blob: _blobStr, _syncedAt: data._syncedAt });
 
                         // Background image: separate doc (may be large)
                         const bg = _storage.getItem("customBackgroundImage");
@@ -589,7 +614,15 @@
                             _fbStatus("No cloud data yet", "#888");
                             return;
                         }
-                        const remote = doc.data();
+                        const remoteDoc = doc.data();
+                        // Unwrap the JSON blob written by the fixed _fbPush.
+                        // Fall back to reading remoteDoc directly for any
+                        // pre-existing cloud data that was pushed by an
+                        // older version of the app (before this fix), so a
+                        // user's last-synced state isn't stranded.
+                        const remote = remoteDoc.blob
+                            ? JSON.parse(remoteDoc.blob)
+                            : remoteDoc;
                         delete remote._syncedAt;
                         // Smart merge: remote wins for most fields, but intelligently
                         // combine srsData and per-day stats to avoid data loss.
