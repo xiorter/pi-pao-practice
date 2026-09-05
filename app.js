@@ -1928,10 +1928,48 @@
                         }
                         // Sync daily credit state so the loaded digits aren't
                         // credited as new typing on the next keystroke.
+                        //
+                        // If this skip-load is SHORTER than what's already
+                        // credited today (e.g. a checklist click resumes
+                        // before an incomplete chunk that already had a few
+                        // digits typed and credited), revoke credit for
+                        // exactly the flagged positions being dropped — same
+                        // as an ordinary backspace — so retyping them later
+                        // doesn't double-credit. Growing (restoring a saved
+                        // session, or jumping forward past content that was
+                        // never tracked digit-by-digit) intentionally does
+                        // NOT credit the extra length: it's being displayed,
+                        // not freshly typed.
+                        if (
+                            sequenceStartIndex === dailyCreditedSeqStart &&
+                            dailyCreditedDate === srsToday() &&
+                            val.length < dailyCreditedMaxLength
+                        ) {
+                            let _skipRevoked = 0;
+                            for (
+                                let _sri = val.length;
+                                _sri < dailyCreditedMaxLength;
+                                _sri++
+                            ) {
+                                if (dailyCreditedFlags[_sri]) _skipRevoked++;
+                            }
+                            if (_skipRevoked > 0) {
+                                const _todaySkip = srsToday();
+                                dailyStats[_todaySkip] = Math.max(
+                                    0,
+                                    (dailyStats[_todaySkip] || 0) - _skipRevoked,
+                                );
+                                dailyCreditedAmount = Math.max(
+                                    0,
+                                    dailyCreditedAmount - _skipRevoked,
+                                );
+                            }
+                        }
                         dailyCreditedSeqStart = sequenceStartIndex;
                         dailyCreditedMaxLength = val.length;
                         dailyCreditedFlags = [];
                         dailyCreditedDate = srsToday();
+                        updateGoalBarOnly();
                         return;
                     }
                     _hintPos = 0; // first non-skip event clears hint override
