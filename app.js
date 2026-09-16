@@ -495,6 +495,15 @@
                 let dailyCreditedDate = ""; // tracks which day the credit state is for
                 let dailyGoalByDate = {}; // { "YYYY-MM-DD": goalDigits } — per-day goal for streak/heatmap
                 let _sessionBlock = -1; // block loaded via checklist click / auto-load (for valid-count gating)
+                // When true, the next skip-load's "PAO for last completed
+                // chunk" toast is suppressed. Set right before the two
+                // page-load skip-loads (auto-loading today's first
+                // checklist entry, or restoring a previous session's raw
+                // input) — a toast popping up before the user has done
+                // anything is unexpected noise. Checklist clicks during the
+                // session leave this false, since being told the PAO for
+                // where you just jumped to is useful there.
+                let _suppressSkipToast = false;
                 let _progressCounted = {}; // { blockNum: { chunkStartPos: true } } — progress counted this pass
                 // Furthest chunk-start position ever GENUINELY completed (typed
                 // in full and correct), updated at the same guarded point as
@@ -1568,12 +1577,68 @@
                         }
                         if (volSlider)
                             volSlider.value = Math.round(volume * 10);
-                        if (savedPiValue && piInput) {
+                        // If no progress has been made on any block yet
+                        // today (blockProgress hasn't been touched since the
+                        // last date rollover — the same signal renderChecklist
+                        // uses to reset it), auto-load the first checklist
+                        // entry (earliest due block, or "Add new chunks" if
+                        // none are due) instead of leaving the input at
+                        // wherever a previous day's session happened to end,
+                        // which could be a completely different, no-longer-
+                        // relevant block.
+                        const _autoLoadToday = srsToday();
+                        const _isFreshDayForAutoLoad =
+                            _blockProgressDate !== _autoLoadToday;
+                        if (_isFreshDayForAutoLoad && piInput) {
+                            let _firstDueForAutoLoad = null;
+                            for (const bnStr in studyBlockData) {
+                                const bn = parseInt(bnStr);
+                                if (
+                                    studyBlockData[bn].dueDate <=
+                                    _autoLoadToday
+                                ) {
+                                    if (
+                                        _firstDueForAutoLoad === null ||
+                                        bn < _firstDueForAutoLoad
+                                    )
+                                        _firstDueForAutoLoad = bn;
+                                }
+                            }
+                            let _autoBn;
+                            if (_firstDueForAutoLoad !== null) {
+                                _autoBn = _firstDueForAutoLoad;
+                            } else {
+                                let _autoMaxB = -1;
+                                for (const bnStr in studyBlockData)
+                                    _autoMaxB = Math.max(
+                                        _autoMaxB,
+                                        parseInt(bnStr),
+                                    );
+                                _autoBn = _autoMaxB + 1;
+                            }
+                            const { start: _autoStart } =
+                                blockRange(_autoBn);
+                            const _autoTyped = blockProgress[_autoBn] || 0;
+                            const _autoTarget = snapToGroupStart(
+                                _autoStart + _autoTyped,
+                            );
+                            _sessionBlock = _autoBn;
+                            _progressCounted[_autoBn] = {};
+                            piInput.value = PI_DIGITS.substr(
+                                0,
+                                _autoTarget,
+                            );
+                            sequenceStartIndex = 0;
+                            skipProcessing = true;
+                            _suppressSkipToast = true;
+                            checkPiDigits(piInput);
+                        } else if (savedPiValue && piInput) {
                             _sessionBlock = savedPiValue.length > 0
                                 ? blockForPos(snapToGroupStart(savedPiValue.length - 1))
                                 : -1;
                             if (_sessionBlock >= 0) _progressCounted[_sessionBlock] = {};
                             skipProcessing = true;
+                            _suppressSkipToast = true;
                             piInput.value = savedPiValue;
                             checkPiDigits(piInput);
                         }
@@ -1915,7 +1980,9 @@
                         }
                         if (outputContainer) outputContainer.scrollTop = outputContainer.scrollHeight;
                         // Toast showing PAO for the last completed chunk
-                        if (val.length > 0) {
+                        // (suppressed on the two page-load skip-loads; see
+                        // _suppressSkipToast).
+                        if (val.length > 0 && !_suppressSkipToast) {
                             let _tPos = Math.max(0, snapToGroupStart(val.length - 1));
                             const _tGs = getGroupSizeForMode(getModeForPos(_tPos + 1));
                             if (_tPos + _tGs > val.length) {
@@ -1926,6 +1993,7 @@
                                 showToast(`${_tInfo.pTerm} / ${_tInfo.aTerm} / ${_tInfo.oTerm}`);
                             }
                         }
+                        _suppressSkipToast = false;
                         // Sync daily credit state so the loaded digits aren't
                         // credited as new typing on the next keystroke.
                         //
@@ -4178,20 +4246,28 @@
                 //
                 // The goal must never SHRINK once the day has started — it
                 // should only ever grow (when new content becomes part of
-                // today, e.g. self-heal finalizing a stuck block). A block
+                // today, e.g. self-heal finalizing a stuck block, or a block
+                // getting sent straight back to the checklist for an
+                // immediate re-review after an "Again" rating). A block
                 // that's due today and gets completed has its due date
                 // pushed into the future by rescheduleBlockFromSeverity, so
-                // "currently due" is NOT a safe basis for the total: computing
-                // it live from "currently due" made the goal drop the moment
-                // a due block was finished (it's no longer due, so it fell
-                // out of the sum), which could suddenly show e.g. 200/400
-                // jumping to 200/200 mid-review. Instead we accumulate a
-                // monotonically-growing set of "blocks that have been due at
-                // some point today" (_goalDueUnion) plus a single frontier
-                // block picked once at the start of the day
-                // (_goalFrontierForToday, so finishing "Add new chunks"
-                // doesn't roll the goal onto tomorrow's frontier too). Both
-                // persist and reset only on a real date change.
+                // "currently due" is NOT a safe basis for the total.
+                //
+                // _goalDueUnion tracks, per block, how many separate passes
+                // through it should count toward today's total, plus the
+                // reviews count last seen (rescheduleBlockFromSeverity's
+                // bd.reviews counter, which increments on every completed
+                // pass). A block due today that we haven't banked a pass for
+                // yet — either because it's newly due, or because its
+                // reviews count went up while it's STILL due today (an
+                // "Again" rating on a first review keeps dueDate at today
+                // and resets blockProgress, sending it back to the checklist
+                // for a full re-type) — gets another pass banked, adding
+                // another full blockRange() worth of digits to the goal.
+                // Without this, retyping an Again-rated block inflates
+                // dailyStats (actual digits typed) without the goal growing
+                // to match, so the bar could hit 100% before the day's real
+                // remaining work was done.
                 let _cachedGoal = 0;
                 let _cachedGoalDate = "";
                 let _cachedGoalSig = "";
@@ -4216,28 +4292,46 @@
                             _startMaxBlock = Math.max(_startMaxBlock, parseInt(bnStr));
                         _goalFrontierForToday = _startMaxBlock + 1;
                     }
-                    // Fold in any block that's due right now — this only
-                    // ever adds block numbers, never removes them, so a
-                    // block completed (and thus rescheduled forward) mid-
-                    // session stays counted for the rest of today.
+                    // Bank a pass for any block that's due today and hasn't
+                    // had this pass counted yet. Never removes or reduces an
+                    // existing entry, so completing a block (which pushes
+                    // its due date forward) can't shrink the goal.
                     for (const bnStr in studyBlockData) {
                         const bn = parseInt(bnStr);
-                        if (studyBlockData[bn].dueDate <= today) {
-                            _goalDueUnion[bn] = true;
+                        const bd = studyBlockData[bn];
+                        if (bd.dueDate <= today) {
+                            const existing = _goalDueUnion[bn];
+                            const curReviews = bd.reviews || 0;
+                            // Migrate old-format entries (plain `true`, from
+                            // before per-block pass tracking existed) by
+                            // treating them the same as "not yet banked".
+                            if (!existing || typeof existing !== "object") {
+                                _goalDueUnion[bn] = { passes: 1, lastReviews: curReviews };
+                            } else if (curReviews > existing.lastReviews) {
+                                existing.passes += curReviews - existing.lastReviews;
+                                existing.lastReviews = curReviews;
+                            }
                         }
                     }
                     const dueBns = Object.keys(_goalDueUnion)
                         .map(Number)
                         .sort((a, b) => a - b);
-                    const sig = dueBns.join(",") + "|" + _goalFrontierForToday;
+                    const sig =
+                        dueBns
+                            .map((bn) => bn + ":" + _goalDueUnion[bn].passes)
+                            .join(",") +
+                        "|" +
+                        _goalFrontierForToday;
                     if (_cachedGoalSig !== sig) {
                         _cachedGoalSig = sig;
-                        const counted = new Set(dueBns);
-                        counted.add(_goalFrontierForToday);
                         let total = 0;
-                        for (const bn of counted) {
+                        for (const bn of dueBns) {
                             const { start, end } = blockRange(bn);
-                            total += end - start + 1;
+                            total += (end - start + 1) * _goalDueUnion[bn].passes;
+                        }
+                        if (!dueBns.includes(_goalFrontierForToday)) {
+                            const { start: _fS, end: _fE } = blockRange(_goalFrontierForToday);
+                            total += _fE - _fS + 1;
                         }
                         _cachedGoal = total;
                         dailyGoalByDate[today] = _cachedGoal;
