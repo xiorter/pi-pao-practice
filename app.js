@@ -4281,7 +4281,11 @@
                         _goalDueUnion = {};
                         _goalFrontierForToday = -1;
                     }
-                    if (_goalFrontierForToday < 0) {
+                    if (!(_goalFrontierForToday >= 0)) {
+                        // Catches both "unset" (-1) and a stale NaN from
+                        // before this fix (NaN < 0 is false, so a plain
+                        // less-than check would never self-heal it; NaN >= 0
+                        // is also false, so negating that catches it).
                         // Either a genuinely new day, or a save from before
                         // this field existed being loaded mid-day (in which
                         // case _goalDueUnion is left as-is rather than wiped,
@@ -4291,6 +4295,25 @@
                         for (const bnStr in studyBlockData)
                             _startMaxBlock = Math.max(_startMaxBlock, parseInt(bnStr));
                         _goalFrontierForToday = _startMaxBlock + 1;
+                    }
+                    // Normalize any stale entries left over from before
+                    // per-block pass tracking existed (plain `true` instead
+                    // of {passes, lastReviews}). The due-blocks loop below
+                    // only migrates entries it visits — i.e. blocks due
+                    // right now — so a block that was already due-and-
+                    // rescheduled before this format existed could be left
+                    // as `true` forever, and `.passes` on it would be
+                    // undefined, corrupting the total into NaN the moment
+                    // it's summed.
+                    for (const bnStr in _goalDueUnion) {
+                        const existing = _goalDueUnion[bnStr];
+                        if (!existing || typeof existing !== "object") {
+                            const bd = studyBlockData[parseInt(bnStr)];
+                            _goalDueUnion[bnStr] = {
+                                passes: 1,
+                                lastReviews: bd ? bd.reviews || 0 : 0,
+                            };
+                        }
                     }
                     // Bank a pass for any block that's due today and hasn't
                     // had this pass counted yet. Never removes or reduces an
