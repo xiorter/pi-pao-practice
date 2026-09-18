@@ -549,8 +549,30 @@
                             "Last sync: " + new Date().toLocaleTimeString();
                 }
 
+                let _fbPushInFlight = false;
+                let _fbPushPendingAgain = false;
                 async function _fbPush() {
                     if (!_fbDb || !_fbSyncCode) return;
+                    // Guard against overlapping writes. _fbSchedulePush
+                    // debounces how often a push is *started*, but if a
+                    // previous push's network round-trip is still pending
+                    // when the debounce timer fires again (a large payload
+                    // on a slow connection, or several completions in quick
+                    // succession each rescheduling the timer), a second
+                    // .set() could fire before the first resolves. Firestore
+                    // queues those client-side, and enough of them piling up
+                    // triggers "Write stream exhausted maximum allowed
+                    // queued writes" — after which further pushes silently
+                    // back off, so a stale pre-review snapshot can end up as
+                    // the last one that actually lands, and a later pull
+                    // brings it back. Coalesce instead: if a push is already
+                    // in flight, just remember to push once more when it
+                    // finishes, rather than starting a second one now.
+                    if (_fbPushInFlight) {
+                        _fbPushPendingAgain = true;
+                        return;
+                    }
+                    _fbPushInFlight = true;
                     try {
                         const data = _fbGetSyncableData();
                         data._syncedAt = Date.now();
@@ -609,6 +631,12 @@
                     } catch (e) {
                         console.error("Sync push error:", e);
                         _fbStatus("Push failed: " + e.message, "#e05252");
+                    } finally {
+                        _fbPushInFlight = false;
+                        if (_fbPushPendingAgain) {
+                            _fbPushPendingAgain = false;
+                            _fbSchedulePush();
+                        }
                     }
                 }
 
@@ -4889,8 +4917,9 @@
                     }
                     const severity = Math.min(1, totalPoints / (2 * chunkCount));
                     const isFirst = bd.reviews === 0;
-                    if (severity >= SEV_THRESH_HARD) {
-                        bd.interval = isFirst ? 1 : 1;
+                    const isAgain = severity >= SEV_THRESH_HARD;
+                    if (isAgain) {
+                        bd.interval = 1;
                         bd.easeFactor = Math.max(1.3, bd.easeFactor - 0.2);
                     } else if (severity >= SEV_THRESH_GOOD) {
                         bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * 1.2));
@@ -4901,7 +4930,15 @@
                         bd.interval = isFirst ? 1 : Math.max(1, Math.round(bd.interval * bd.easeFactor * 1.3));
                         bd.easeFactor = Math.min(4.0, bd.easeFactor + 0.15);
                     }
-                    bd.dueDate = isFirst && severity >= SEV_THRESH_HARD ? srsToday() : srsDaysFromNow(bd.interval);
+                    // Again always sends the block straight back to today's
+                    // checklist (like Anki's "relearning" queue) — not just
+                    // on the block's first-ever review. Previously this only
+                    // applied when isFirst was true, so an Again rating on a
+                    // later review instead scheduled it for tomorrow via the
+                    // normal interval — same toast text ("Again"), very
+                    // different (and surprising) result: the block silently
+                    // left today's checklist instead of staying in it.
+                    bd.dueDate = isAgain ? srsToday() : srsDaysFromNow(bd.interval);
                     bd.reviews++;
                     blockProgress[bn] = 0;
                     delete _blockRatings[bn];
@@ -4909,6 +4946,7 @@
                     saveSettings();
                     showToast(`Block ${bn + 1} review complete: ${severity >= SEV_THRESH_HARD ? "Again" : severity >= SEV_THRESH_GOOD ? "Hard" : severity > SEV_THRESH_EASY ? "Good" : "Easy"}`);
                 }
+
 
                 function migrateStudyBlocks() {
                     const blocks = {};
